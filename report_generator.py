@@ -5,11 +5,9 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=9))
 
 def generate_files(watch_data, scan_data):
-    # フォルダの作成（historyフォルダを追加）
     os.makedirs("public", exist_ok=True)
     os.makedirs("public/history", exist_ok=True)
     
-    # JSTで現在時刻を取得
     now = datetime.now(JST)
     now_str = now.strftime('%Y/%m/%d %H:%M')
     date_str = now.strftime('%Y-%m-%d')
@@ -21,15 +19,21 @@ def generate_files(watch_data, scan_data):
         "scan_data": scan_data
     }
     
-    # 最新データの保存
     with open("public/report.json", "w", encoding="utf-8") as f:
         json.dump(report_dict, f, ensure_ascii=False, indent=2)
         
-    # 履歴データの保存（YYYY-MM-DD.json）
     history_path = f"public/history/{date_str}.json"
     with open(history_path, "w", encoding="utf-8") as f:
         json.dump(report_dict, f, ensure_ascii=False, indent=2)
-        
+
+    # ---------------------------------------------------------
+    # 【NEW】パフォーマンス集計データの読み込み
+    # ---------------------------------------------------------
+    summary = {"total_signals": 0, "win_rate": 0.0, "avg_return": 0.0, "expectancy": 0.0}
+    if os.path.exists("public/performance_summary.json"):
+        with open("public/performance_summary.json", "r", encoding="utf-8") as f:
+            summary = json.load(f)
+            
     # ダークモード軽量HTML生成
     html = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -39,7 +43,7 @@ def generate_files(watch_data, scan_data):
     <title>投資戦略ダッシュボード</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 15px; line-height: 1.6; }}
-        h1 {{ font-size: 1.4rem; border-bottom: 2px solid #333; padding-bottom: 10px; }}
+        h1 {{ font-size: 1.4rem; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }}
         h2 {{ font-size: 1.1rem; margin-top: 25px; color: #4db8ff; border-left: 4px solid #4db8ff; padding-left: 8px; }}
         .card {{ background-color: #1e1e1e; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }}
         .card-title {{ font-weight: bold; font-size: 1.1rem; margin-bottom: 8px; color: #fff; }}
@@ -50,16 +54,45 @@ def generate_files(watch_data, scan_data):
         .rsi-high {{ color: #ff5252; font-weight: bold; }}
         .rsi-low {{ color: #69f0ae; font-weight: bold; }}
         .highlight {{ border-left: 4px solid #ffab00; background-color: #2a2a2a; }}
+        .stats-box {{ background-color: #1a237e; border: 1px solid #3949ab; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }}
+        .stat-item {{ text-align: center; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; }}
+        .stat-value {{ font-size: 1.3rem; font-weight: bold; color: #fff; }}
+        .stat-label {{ font-size: 0.75rem; color: #9fa8da; }}
         .glossary {{ background-color: #1a1a1a; padding: 15px; border-radius: 8px; font-size: 0.85rem; margin-top: 30px; border-top: 1px solid #333; }}
         .glossary dt {{ font-weight: bold; color: #ffca28; margin-top: 10px; }}
         .glossary dd {{ margin-left: 0; margin-bottom: 10px; color: #bbb; }}
         .error-text {{ color: #757575; font-style: italic; font-size: 0.9rem; }}
-        .update-time {{ font-size: 0.85rem; color: #888; text-align: right; }}
+        .update-time {{ font-size: 0.85rem; color: #888; text-align: right; margin-top: -15px; margin-bottom: 15px; }}
     </style>
 </head>
 <body>
     <h1>📊 投資戦略ダッシュボード</h1>
     <div class="update-time">最終更新: {now_str}</div>
+
+    <div class="stats-box">
+        <div style="font-weight:bold; color:#c5cae9; border-bottom:1px solid #3949ab; padding-bottom:5px;">📈 B型戦略パフォーマンス（検証中）</div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value">{summary["total_signals"]}</div>
+                <div class="stat-label">総シグナル数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{summary["win_rate"]}%</div>
+                <div class="stat-label">勝率</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{summary["avg_return"]}%</div>
+                <div class="stat-label">平均翌日リターン</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{summary["expectancy"]}%</div>
+                <div class="stat-label">期待値</div>
+            </div>
+        </div>
+        <div style="font-size: 0.75rem; color: #7986cb; text-align: right; margin-top: 8px;">※翌日リターン確定分のみ集計</div>
+    </div>
+    
     <h2>📋 監視銘柄の状況</h2>
 """
     for item in watch_data:
