@@ -16,10 +16,12 @@ SCAN_UNIVERSE = [
     "8630", "3092", "4704", "7012", "6762", "6506", "8252", "4188", "4661", "7259"
 ]
 
+# （上の import と SCAN_UNIVERSE = [...] はそのまま残してください）
+
 def scan_b_type():
     results = []
     end = datetime.now()
-    start = end - timedelta(days=60) # 20営業日分の出来高平均を取るため約2ヶ月分取得
+    start = end - timedelta(days=60) 
     
     for code in SCAN_UNIVERSE:
         try:
@@ -30,20 +32,19 @@ def scan_b_type():
             latest = df.iloc[-1]
             prev = df.iloc[-2]
             
-            # 20日間の出来高平均（前日まで）を計算
             vol_avg20 = df['Volume'].rolling(window=20).mean().iloc[-2]
-            
             if vol_avg20 == 0 or pd.isna(vol_avg20):
                 continue
                 
             vol_ratio = latest['Volume'] / vol_avg20
             
-            # 【抽出条件】出来高2.5倍以上 ＋ 株価が前日より上昇（ダマシの下落急増を排除）
             if vol_ratio >= 2.5 and latest['Close'] > prev['Close']:
-                results.append(f"・{code} (出来高 {vol_ratio:.1f}倍 / 終値 {int(latest['Close']):,}円)")
+                # データとして返す
+                results.append({
+                    "code": code, "price": int(latest['Close']), "vol_ratio": round(vol_ratio, 1)
+                })
                 
         except Exception:
-            # タイムアウト等のエラーが出た銘柄は静かにスキップ。システムを止めない。
             pass
             
     return results
