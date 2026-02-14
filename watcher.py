@@ -1,5 +1,7 @@
 import pandas_datareader.data as web
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+JST = timezone(timedelta(hours=9))
 
 WATCH_LIST = {
     "7203": "トヨタ自動車", "6758": "ソニーグループ", "8411": "みずほFG",
@@ -10,7 +12,7 @@ WATCH_LIST = {
 
 def analyze_watch_tickers():
     results = []
-    end = datetime.now()
+    end = datetime.now(JST)
     start = end - timedelta(days=400) 
     
     for code, name in WATCH_LIST.items():
@@ -30,12 +32,10 @@ def analyze_watch_tickers():
             rsi = 100 - (100 / (1 + rs))
             
             position = "200日線上" if latest['Close'] >= sma200 else "200日線下"
-            # 文章ではなくデータとして返す（Step2の最重要ポイント）
             results.append({
                 "code": code, "name": name, "price": int(latest['Close']),
                 "position": position, "rsi": round(rsi, 1), "error": False
             })
-            
         except Exception:
             results.append({"code": code, "name": name, "error": True, "error_msg": "取得スキップ"})
             
