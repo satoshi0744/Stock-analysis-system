@@ -5,14 +5,12 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from watcher import analyze_watch_tickers
 from scanner import scan_b_type
+from report_generator import generate_files
 
 def send_email(text_body):
     user = os.environ.get("GMAIL_USER")
     pwd = os.environ.get("GMAIL_PASSWORD")
-    
-    if not user or not pwd:
-        print("【警告】メール設定がありません。")
-        return
+    if not user or not pwd: return
 
     msg = MIMEMultipart()
     msg['Subject'] = f"投資戦略レポート [{datetime.now().strftime('%m/%d')}]"
@@ -25,33 +23,48 @@ def send_email(text_body):
         server.login(user, pwd)
         server.send_message(msg)
         server.quit()
-        print("メール送信完了しました。")
-    except Exception as e:
-        print(f"メール送信エラー: {e}")
+    except Exception:
+        pass
 
 def main():
-    print("--- 監視銘柄 (Watcher) 分析開始 ---")
-    watch_results = analyze_watch_tickers()
+    watch_data = analyze_watch_tickers()
+    scan_data = scan_b_type()
     
-    print("--- スキャン (Scanner) 開始 ---")
-    scan_results = scan_b_type()
+    # 【NEW】HTMLとJSONの生成職人を呼び出す
+    generate_files(watch_data, scan_data)
     
-    # -------------------------
-    # 【修正】サトシさんの要望通り、監視銘柄を上にし、タイトルを分かりやすく変更
-    # -------------------------
-    body = "【📋 保有・監視銘柄の動向（200日線 / RSI）】\n"
-    if watch_results:
-        body += "\n".join(watch_results) + "\n\n"
+    # データをメール用のテキストに組み立てる
+    body = "【📋 保有・監視銘柄の動向】\n"
+    if watch_data:
+        for item in watch_data:
+            if item["error"]:
+                body += f"・{item['code']} {item['name']}: {item['error_msg']}\n"
+            else:
+                body += f"・{item['code']} {item['name']}: {item['price']:,}円 ({item['position']} / RSI: {item['rsi']})\n"
+        body += "\n"
     else:
         body += "・データなし\n\n"
 
-    body += "【🚀 本日の市場テーマ候補（出来高20日平均の2.5倍以上 ＋ 上昇）】\n"
-    if scan_results:
-        body += "\n".join(scan_results) + "\n\n"
+    body += "【🚀 本日の市場テーマ候補】\n"
+    if scan_data:
+        for item in scan_data:
+            body += f"・{item['code']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
+        body += "\n"
     else:
-        body += "・本日の該当銘柄なし（またはデータ取得スキップ）\n\n"
+        body += "・本日の該当銘柄なし（またはスキップ）\n\n"
         
-    body += "※エラーが発生した銘柄は自動スキップし、完走を優先しています。\n"
+    # GitHub PagesのURLを自動生成して本文に入れる
+    repo_path = os.environ.get("GITHUB_REPOSITORY", "your-username/your-repo")
+    username = repo_path.split('/')[0] if '/' in repo_path else ""
+    repo_name = repo_path.split('/')[1] if '/' in repo_path else ""
+    pages_url = f"https://{username}.github.io/{repo_name}/"
+    
+    body += f"📱 スマホ用Webダッシュボードはこちら:\n{pages_url}\n\n"
+    
+    body += "-" * 40 + "\n【💡 投資用語メモ】\n"
+    body += "・RSI：過熱感の指標（70以上買われすぎ、30以下売られすぎ）。\n"
+    body += "・200日線：過去約1年の平均。長期トレンドの最重要ライン。\n"
+    body += "・出来高急増：大口資金流入のサイン。\n" + "-" * 40 + "\n"
     
     send_email(body)
 
