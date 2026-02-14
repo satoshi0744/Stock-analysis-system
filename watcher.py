@@ -18,14 +18,15 @@ WATCH_LIST = {
 def analyze_watch_tickers():
     results = []
     end = datetime.now()
-    start = end - timedelta(days=300) # 200日線を計算するため長めに取得
+    # 【修正】営業日200日を確実に確保するため、過去400日分を取得する
+    start = end - timedelta(days=400) 
     
     for code, name in WATCH_LIST.items():
         try:
             # Stooqからデータ取得
             df = web.DataReader(f"{code}.JP", "stooq", start, end).sort_index()
             if len(df) < 200:
-                results.append(f"・{code} {name}: データ不足")
+                results.append(f"・{code} {name}: データ不足(取得件数: {len(df)}件)")
                 continue
             
             latest = df.iloc[-1]
@@ -43,7 +44,6 @@ def analyze_watch_tickers():
             results.append(f"・{code} {name}: {int(latest['Close']):,}円 ({position} / RSI: {rsi:.1f})")
             
         except Exception as e:
-            # エラーが起きてもシステムを止めず、スキップして次へ進む（フォールトトレラント設計）
             results.append(f"・{code} {name}: データ取得スキップ")
             
     return results
