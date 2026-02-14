@@ -2,10 +2,12 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from watcher import analyze_watch_tickers
 from scanner import scan_b_type
 from report_generator import generate_files
+
+JST = timezone(timedelta(hours=9))
 
 def send_email(text_body):
     user = os.environ.get("GMAIL_USER")
@@ -13,7 +15,7 @@ def send_email(text_body):
     if not user or not pwd: return
 
     msg = MIMEMultipart()
-    msg['Subject'] = f"投資戦略レポート [{datetime.now().strftime('%m/%d')}]"
+    msg['Subject'] = f"投資戦略レポート [{datetime.now(JST).strftime('%m/%d')}]"
     msg['From'] = user
     msg['To'] = user
     msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
@@ -30,11 +32,9 @@ def main():
     watch_data = analyze_watch_tickers()
     scan_data = scan_b_type()
     
-    # 【NEW】HTMLとJSONの生成職人を呼び出す
     generate_files(watch_data, scan_data)
     
-    # データをメール用のテキストに組み立てる
-    body = "【📋 保有・監視銘柄の動向】\n"
+    body = "【📋 保局・監視銘柄の動向】\n"
     if watch_data:
         for item in watch_data:
             if item["error"]:
@@ -53,7 +53,6 @@ def main():
     else:
         body += "・本日の該当銘柄なし（またはスキップ）\n\n"
         
-    # GitHub PagesのURLを自動生成して本文に入れる
     repo_path = os.environ.get("GITHUB_REPOSITORY", "your-username/your-repo")
     username = repo_path.split('/')[0] if '/' in repo_path else ""
     repo_name = repo_path.split('/')[1] if '/' in repo_path else ""
