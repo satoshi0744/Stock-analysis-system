@@ -1,5 +1,8 @@
 import pandas_datareader.data as web
-from datetime import datetime, timedelta
+import pandas as pd
+from datetime import datetime, timedelta, timezone
+
+JST = timezone(timedelta(hours=9))
 
 # スキャン対象（時価総額上位の代表的なプライム銘柄を初期セット。後から追加可能）
 # ※1600銘柄全件はタイムアウトのリスクがあるため、まずは流動性の高い100銘柄でエンジンをテストします
@@ -20,31 +23,24 @@ SCAN_UNIVERSE = [
 
 def scan_b_type():
     results = []
-    end = datetime.now()
+    end = datetime.now(JST)
     start = end - timedelta(days=60) 
     
     for code in SCAN_UNIVERSE:
         try:
             df = web.DataReader(f"{code}.JP", "stooq", start, end).sort_index()
-            if len(df) < 25:
-                continue
+            if len(df) < 25: continue
                 
             latest = df.iloc[-1]
             prev = df.iloc[-2]
             
             vol_avg20 = df['Volume'].rolling(window=20).mean().iloc[-2]
-            if vol_avg20 == 0 or pd.isna(vol_avg20):
-                continue
+            if vol_avg20 == 0 or pd.isna(vol_avg20): continue
                 
             vol_ratio = latest['Volume'] / vol_avg20
             
             if vol_ratio >= 2.5 and latest['Close'] > prev['Close']:
-                # データとして返す
-                results.append({
-                    "code": code, "price": int(latest['Close']), "vol_ratio": round(vol_ratio, 1)
-                })
-                
+                results.append({"code": code, "price": int(latest['Close']), "vol_ratio": round(vol_ratio, 1)})
         except Exception:
             pass
-            
     return results
