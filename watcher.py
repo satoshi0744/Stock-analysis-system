@@ -1,66 +1,42 @@
-import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime
-from watcher import analyze_watch_tickers
-from scanner import scan_b_type
+import pandas_datareader.data as web
+from datetime import datetime, timedelta
 
-def send_email(text_body):
-    user = os.environ.get("GMAIL_USER")
-    pwd = os.environ.get("GMAIL_PASSWORD")
+WATCH_LIST = {
+    "7203": "トヨタ自動車", "6758": "ソニーグループ", "8411": "みずほFG",
+    "5020": "ENEOS", "8058": "三菱商事", "7011": "三菱重工業",
+    "9984": "ソフトバンクG", "6146": "ディスコ", "6857": "アドバンテスト",
+    "8306": "三菱UFJ"
+}
+
+def analyze_watch_tickers():
+    results = []
+    end = datetime.now()
+    start = end - timedelta(days=400) 
     
-    if not user or not pwd:
-        print("【警告】メール設定がありません。")
-        return
-
-    msg = MIMEMultipart()
-    msg['Subject'] = f"投資戦略レポート [{datetime.now().strftime('%m/%d')}]"
-    msg['From'] = user
-    msg['To'] = user
-    msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
-
-    try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(user, pwd)
-        server.send_message(msg)
-        server.quit()
-        print("メール送信完了しました。")
-    except Exception as e:
-        print(f"メール送信エラー: {e}")
-
-def main():
-    print("--- 監視銘柄 (Watcher) 分析開始 ---")
-    watch_results = analyze_watch_tickers()
-    
-    print("--- スキャン (Scanner) 開始 ---")
-    scan_results = scan_b_type()
-    
-    body = "【📋 保有・監視銘柄の動向（200日線 / RSI）】\n"
-    if watch_results:
-        body += "\n".join(watch_results) + "\n\n"
-    else:
-        body += "・データなし\n\n"
-
-    body += "【🚀 本日の市場テーマ候補（出来高20日平均の2.5倍以上 ＋ 上昇）】\n"
-    if scan_results:
-        body += "\n".join(scan_results) + "\n\n"
-    else:
-        body += "・本日の該当銘柄なし（またはデータ取得スキップ）\n\n"
-        
-    body += "※エラーが発生した銘柄は自動スキップし、完走を優先しています。\n\n"
-    
-    # -------------------------
-    # 【追加】サトシさんご提案の用語解説セクション
-    # -------------------------
-    body += "-" * 40 + "\n"
-    body += "【💡 投資用語メモ】\n"
-    body += "・RSI（相対力指数）：株価の過熱感を指数化したもの。70％以上で買われすぎ、30％以下で売られすぎの目安。50%が強弱の中心。\n"
-    body += "・200日線（移動平均線）：過去200営業日（約1年）の平均株価。長期トレンドの最重要ライン。株価がこの線上にあれば長期上昇トレンド、下なら下落トレンドとされる。\n"
-    body += "・出来高急増（動意）：取引成立数の急拡大。株価を動かすエネルギーであり、大口資金（機関投資家など）が流入し、新たなテーマが始まる初動のサインとなることが多い。\n"
-    body += "-" * 40 + "\n"
-    
-    send_email(body)
-
-if __name__ == "__main__":
-    main()
+    for code, name in WATCH_LIST.items():
+        try:
+            df = web.DataReader(f"{code}.JP", "stooq", start, end).sort_index()
+            if len(df) < 200:
+                results.append({"code": code, "name": name, "error": True, "error_msg": f"データ不足({len(df)}件)"})
+                continue
+            
+            latest = df.iloc[-1]
+            sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
+            
+            delta = df['Close'].diff()
+            gain = delta.where(delta > 0, 0).rolling(window=14).mean().iloc[-1]
+            loss = -delta.where(delta < 0, 0).rolling(window=14).mean().iloc[-1]
+            rs = gain / loss if loss != 0 else 100
+            rsi = 100 - (100 / (1 + rs))
+            
+            position = "200日線上" if latest['Close'] >= sma200 else "200日線下"
+            # 文章ではなくデータとして返す（Step2の最重要ポイント）
+            results.append({
+                "code": code, "name": name, "price": int(latest['Close']),
+                "position": position, "rsi": round(rsi, 1), "error": False
+            })
+            
+        except Exception:
+            results.append({"code": code, "name": name, "error": True, "error_msg": "取得スキップ"})
+            
+    return results
