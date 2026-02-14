@@ -6,8 +6,9 @@ from datetime import datetime, timedelta, timezone
 from watcher import analyze_watch_tickers
 from scanner import scan_b_type
 from report_generator import generate_files
-# ↓ 新しく追加した追跡機能の読み込み
 from performance_tracker import update_performance
+# ↓ 分析職人を呼び出す
+from analyze_performance import analyze
 
 JST = timezone(timedelta(hours=9))
 
@@ -31,12 +32,16 @@ def send_email(text_body):
         pass
 
 def main():
-    # ↓ 毎日最初に、過去の履歴にリターンを書き込む
+    # 1. 過去の履歴に翌日リターンを書き込む
     update_performance()
+    # 2. リターンが書き込まれた履歴を集計し、勝率などを計算する
+    analyze()
     
+    # 3. 今日のデータを取得する
     watch_data = analyze_watch_tickers()
     scan_data = scan_b_type()
     
+    # 4. HTMLとJSONを生成する（ここで勝率データもHTMLに組み込まれる）
     generate_files(watch_data, scan_data)
     
     body = "【📋 保有・監視銘柄の動向】\n"
