@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投資戦略ダッシュボード</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 15px; line-height: 1.6; }
+        h1 { font-size: 1.4rem; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        h2 { font-size: 1.1rem; margin-top: 25px; color: #4db8ff; border-left: 4px solid #4db8ff; padding-left: 8px; }
+        .card { background-color: #1e1e1e; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 8px; color: #fff; }
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; }
+        .badge-up { background-color: #2e7d32; color: white; }
+        .badge-down { background-color: #c62828; color: white; }
+        .badge-neutral { background-color: #424242; color: white; }
+        .rsi-high { color: #ff5252; font-weight: bold; }
+        .rsi-low { color: #69f0ae; font-weight: bold; }
+        .highlight { border-left: 4px solid #ffab00; background-color: #2a2a2a; }
+        .glossary { background-color: #1a1a1a; padding: 15px; border-radius: 8px; font-size: 0.85rem; margin-top: 30px; border-top: 1px solid #333; }
+        .glossary dt { font-weight: bold; color: #ffca28; margin-top: 10px; }
+        .glossary dd { margin-left: 0; margin-bottom: 10px; color: #bbb; }
+        .error-text { color: #757575; font-style: italic; font-size: 0.9rem; }
+        .update-time { font-size: 0.85rem; color: #888; text-align: right; }
+    </style>
+</head>
+<body>
+    <h1>📊 投資戦略ダッシュボード</h1>
+    <div class="update-time">最終更新: 2026/02/14 11:27</div>
+    
+    <h2>📋 監視銘柄の状況</h2>
+<div class="card"><div class="card-title">7203 トヨタ自動車</div><div>現在値: <strong style="font-size:1.1rem;">3,705円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="">57.0</span></span></div></div><div class="card"><div class="card-title">6758 ソニーグループ</div><div>現在値: <strong style="font-size:1.1rem;">3,605円</strong></div><div style="margin-top:8px;"><span class="badge badge-down">200日線下</span><span style="font-size:0.9rem;">RSI: <span class="">48.6</span></span></div></div><div class="card"><div class="card-title">8411 みずほFG</div><div>現在値: <strong style="font-size:1.1rem;">7,867円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="rsi-high">76.2</span></span></div></div><div class="card"><div class="card-title">5020 ENEOS</div><div>現在値: <strong style="font-size:1.1rem;">1,488円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="rsi-high">79.8</span></span></div></div><div class="card"><div class="card-title">8058 三菱商事</div><div>現在値: <strong style="font-size:1.1rem;">5,164円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="rsi-high">85.6</span></span></div></div><div class="card"><div class="card-title">7011 三菱重工業</div><div>現在値: <strong style="font-size:1.1rem;">4,995円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="">62.1</span></span></div></div><div class="card"><div class="card-title">9984 ソフトバンクG</div><div>現在値: <strong style="font-size:1.1rem;">4,817円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="">61.4</span></span></div></div><div class="card"><div class="card-title">6146 ディスコ</div><div>現在値: <strong style="font-size:1.1rem;">72,830円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="">56.0</span></span></div></div><div class="card"><div class="card-title">6857 アドバンテスト</div><div>現在値: <strong style="font-size:1.1rem;">26,810円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="">63.8</span></span></div></div><div class="card"><div class="card-title">8306 三菱UFJ</div><div>現在値: <strong style="font-size:1.1rem;">3,085円</strong></div><div style="margin-top:8px;"><span class="badge badge-up">200日線上</span><span style="font-size:0.9rem;">RSI: <span class="">67.1</span></span></div></div>
+    <h2>🚀 本日の市場テーマ候補</h2>
+    <p style="font-size: 0.85rem; color: #888; margin-top:-5px;">出来高20日平均の2.5倍以上 ＋ 上昇</p>
+<div class="card"><div class="error-text">本日の該当銘柄なし（またはデータ取得スキップ）</div></div>
+    <div class="glossary">
+        <div style="font-weight:bold; font-size:1rem; margin-bottom:8px; border-bottom:1px solid #333; padding-bottom:5px;">💡 投資用語メモ</div>
+        <dl>
+            <dt>RSI（相対力指数）</dt>
+            <dd>株価の過熱感を指数化したもの。70％以上で買われすぎ、30％以下で売られすぎの目安。50%が中心。</dd>
+            <dt>200日線（移動平均線）</dt>
+            <dd>過去200営業日（約1年）の平均。この線上にあれば長期上昇トレンド、下なら下落トレンド。</dd>
+            <dt>出来高急増（動意）</dt>
+            <dd>取引の急拡大。大口資金が流入し、新たなテーマが始まる初動サインとなることが多い。</dd>
+        </dl>
+    </div>
+</body>
+</html>
