@@ -71,7 +71,7 @@ def generate_files(watch_data, scan_data):
     <div class="update-time">最終更新: {now_str}</div>
 
     <div class="stats-box">
-        <div style="font-weight:bold; color:#c5cae9; border-bottom:1px solid #3949ab; padding-bottom:5px;">📈 B型戦略パフォーマンス（検証中）</div>
+        <div style="font-weight:bold; color:#c5cae9; border-bottom:1px solid #3949ab; padding-bottom:5px;">📈 市場テーマ戦略（出来高急増） パフォーマンス検証</div>
         <div class="stats-grid">
             <div class="stat-item">
                 <div class="stat-value">{summary["total_signals"]}</div>
