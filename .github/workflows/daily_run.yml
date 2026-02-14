@@ -1,10 +1,13 @@
-name: Market Intelligence (Step 1)
+name: Market Intelligence (Step 2)
 
 on:
   schedule:
-    # 月〜金の日本時間18:00 (UTC 9:00) に起動
     - cron: '0 9 * * 1-5'
-  workflow_dispatch: # 手動テスト用ボタン
+  workflow_dispatch:
+
+# Webページ（gh-pagesブランチ）を書き換えるための権限を許可
+permissions:
+  contents: write
 
 jobs:
   run-analysis:
@@ -21,8 +24,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Core Logic
+      - name: Run Core Logic and Generate HTML
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
         run: python main.py
+
+      # 生成された public フォルダの中身（HTMLとJSON）を自動公開する
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
