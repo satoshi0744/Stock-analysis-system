@@ -132,45 +132,51 @@ def generate_files(watch_data, scan_data):
             if(item.history_data && document.getElementById('chart-' + item.code)) {{
                 const container = document.getElementById('chart-' + item.code);
                 
-                // チャートの初期化（ダークモード仕様）
+                // チャートの初期化（V4安定版 ＋ 自動サイズ調整機能）
                 const chart = LightweightCharts.createChart(container, {{
+                    autoSize: true, // 【NEW】スマホやウィンドウのサイズ変更に自動追従
                     layout: {{ background: {{ type: 'solid', color: '#1e1e1e' }}, textColor: '#d1d4dc', }},
                     grid: {{ vertLines: {{ color: '#2b2b43' }}, horzLines: {{ color: '#2b2b43' }} }},
                     rightPriceScale: {{ borderColor: '#2b2b43' }},
-                    timeScale: {{ borderColor: '#2b2b43', timeVisible: false }},
+                    timeScale: {{ borderColor: '#2b2b43', timeVisible: true }}, // 【NEW】日付も表示させる
                     handleScroll: false, // スマホでスクロール時に邪魔にならないよう無効化
                     handleScale: false
                 }});
 
-                // ローソク足シリーズの追加
+                // V4仕様のローソク足シリーズ追加
                 const candleSeries = chart.addCandlestickSeries({{
                     upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
                     wickUpColor: '#26a69a', wickDownColor: '#ef5350'
                 }});
 
-                // 出来高シリーズの追加（下部に重ねる）
+                // V4仕様の出来高シリーズ追加（下部に重ねる）
                 const volumeSeries = chart.addHistogramSeries({{
                     color: '#26a69a',
                     priceFormat: {{ type: 'volume' }},
-                    priceScaleId: '', 
+                    priceScaleId: 'volume_scale', // 【NEW】エラー防止のため明示的なIDを付与
                 }});
                 
                 // 出来高グラフの高さをチャートの下20%に抑える
-                chart.priceScale('').applyOptions({{
+                chart.priceScale('volume_scale').applyOptions({{
                     scaleMargins: {{ top: 0.8, bottom: 0 }},
                 }});
 
                 const candleData = [];
                 const volumeData = [];
+                let lastTime = ""; // 重複チェック用変数
                 
-                // データのマッピング
+                // データのマッピング（JS側の安全装置付き）
                 item.history_data.forEach(d => {{
-                    candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
-                    volumeData.push({{
-                        time: d.time,
-                        value: d.volume,
-                        color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
-                    }});
+                    // 【NEW】欠損値と重複日付をブロックする安全装置
+                    if (d.open != null && d.close != null && d.time !== lastTime) {{
+                        candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
+                        volumeData.push({{
+                            time: d.time,
+                            value: d.volume || 0,
+                            color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                        }});
+                        lastTime = d.time;
+                    }}
                 }});
 
                 // データをセットして表示範囲を調整
