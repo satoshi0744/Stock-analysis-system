@@ -32,10 +32,33 @@ def analyze_watch_tickers():
             rsi = 100 - (100 / (1 + rs))
             
             position = "200日線上" if latest['Close'] >= sma200 else "200日線下"
-            results.append({
+            
+            # 基本データの作成
+            item_data = {
                 "code": code, "name": name, "price": int(latest['Close']),
                 "position": position, "rsi": round(rsi, 1), "error": False
-            })
+            }
+
+            # ---------------------------------------------------------
+            # 【NEW】Step 4-A-1: 7203(トヨタ)限定で120日分のチャート配列を追加
+            # ---------------------------------------------------------
+            if code == "7203":
+                df_120 = df.tail(120)
+                history_data = []
+                for date_index, row in df_120.iterrows():
+                    history_data.append({
+                        "time": date_index.strftime('%Y-%m-%d'),
+                        "open": float(row['Open']),
+                        "high": float(row['High']),
+                        "low": float(row['Low']),
+                        "close": float(row['Close']),
+                        "volume": int(row['Volume'])
+                    })
+                item_data["history_data"] = history_data
+            # ---------------------------------------------------------
+
+            results.append(item_data)
+
         except Exception:
             results.append({"code": code, "name": name, "error": True, "error_msg": "取得スキップ"})
             
