@@ -1,6 +1,6 @@
+import pandas as pd
 import pandas_datareader.data as web
 from datetime import datetime, timedelta, timezone
-
 JST = timezone(timedelta(hours=9))
 
 WATCH_LIST = {
@@ -40,10 +40,19 @@ def analyze_watch_tickers():
             }
 
             # ---------------------------------------------------------
-            # 【NEW】Step 4-A-1: 7203(トヨタ)限定で120日分のチャート配列を追加
+            # 【修正】Step 4-A-1: 7203(トヨタ)限定（鉄壁のデータクリーニング）
             # ---------------------------------------------------------
             if code == "7203":
-                df_120 = df.tail(120)
+                # 1. 念のため明示的に古い順（昇順）に並べ替え
+                df_clean = df.sort_index(ascending=True)
+                # 2. 重複した日付を排除（最後を残す）
+                df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
+                # 3. 出来高の欠損(NaN)は「0」で埋める（エラー回避）
+                df_clean['Volume'] = df_clean['Volume'].fillna(0)
+                # 4. 価格データ(OHLC)が欠損している異常な日だけを除外
+                df_clean = df_clean.dropna(subset=['Open', 'High', 'Low', 'Close'])
+                
+                df_120 = df_clean.tail(120)
                 history_data = []
                 for date_index, row in df_120.iterrows():
                     history_data.append({
@@ -52,11 +61,10 @@ def analyze_watch_tickers():
                         "high": float(row['High']),
                         "low": float(row['Low']),
                         "close": float(row['Close']),
-                        "volume": int(row['Volume'])
+                        "volume": float(row['Volume'])
                     })
                 item_data["history_data"] = history_data
             # ---------------------------------------------------------
-
             results.append(item_data)
 
         except Exception:
