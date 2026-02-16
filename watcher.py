@@ -1,6 +1,7 @@
 import pandas as pd
-import pandas_datareader.data as web
+import yfinance as yf
 from datetime import datetime, timedelta, timezone
+
 JST = timezone(timedelta(hours=9))
 
 WATCH_LIST = {
@@ -15,12 +16,22 @@ def analyze_watch_tickers():
     end = datetime.now(JST)
     start = end - timedelta(days=400) 
     
+    # yfinance用に文字列の日付を用意（endは含まれないため+1日する）
+    start_str = start.strftime('%Y-%m-%d')
+    end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
+    
     for code, name in WATCH_LIST.items():
         try:
-            df = web.DataReader(f"{code}.JP", "stooq", start, end).sort_index()
-            if len(df) < 200:
+            # 【換装】yfinanceからデータを取得 (コード末尾は .T)
+            ticker = yf.Ticker(f"{code}.T")
+            df = ticker.history(start=start_str, end=end_str)
+            
+            if df.empty or len(df) < 200:
                 results.append({"code": code, "name": name, "error": True, "error_msg": f"データ不足({len(df)}件)"})
                 continue
+            
+            # yfinance特有のタイムゾーン情報を削除して既存システムと合わせる
+            df.index = df.index.tz_localize(None)
             
             latest = df.iloc[-1]
             sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
@@ -33,38 +44,30 @@ def analyze_watch_tickers():
             
             position = "200日線上" if latest['Close'] >= sma200 else "200日線下"
             
-            # 基本データの作成
             item_data = {
                 "code": code, "name": name, "price": int(latest['Close']),
                 "position": position, "rsi": round(rsi, 1), "error": False
             }
 
-            # ---------------------------------------------------------
-            # 【修正】Step 4-A-1: 7203(トヨタ)限定（鉄壁のデータクリーニング）
-            # ---------------------------------------------------------
-            if code == "7203":
-                # 1. 念のため明示的に古い順（昇順）に並べ替え
-                df_clean = df.sort_index(ascending=True)
-                # 2. 重複した日付を排除（最後を残す）
-                df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
-                # 3. 出来高の欠損(NaN)は「0」で埋める（エラー回避）
-                df_clean['Volume'] = df_clean['Volume'].fillna(0)
-                # 4. 価格データ(OHLC)が欠損している異常な日だけを除外
-                df_clean = df_clean.dropna(subset=['Open', 'High', 'Low', 'Close'])
-                
-                df_120 = df_clean.tail(120)
-                history_data = []
-                for date_index, row in df_120.iterrows():
-                    history_data.append({
-                        "time": date_index.strftime('%Y-%m-%d'),
-                        "open": float(row['Open']),
-                        "high": float(row['High']),
-                        "low": float(row['Low']),
-                        "close": float(row['Close']),
-                        "volume": float(row['Volume'])
-                    })
-                item_data["history_data"] = history_data
-            # ---------------------------------------------------------
+            # 全監視銘柄へチャート用データを展開
+            df_clean = df.sort_index(ascending=True)
+            df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
+            df_clean['Volume'] = df_clean['Volume'].fillna(0)
+            df_clean = df_clean.dropna(subset=['Open', 'High', 'Low', 'Close'])
+            
+            df_120 = df_clean.tail(120)
+            history_data = []
+            for date_index, row in df_120.iterrows():
+                history_data.append({
+                    "time": date_index.strftime('%Y-%m-%d'),
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close']),
+                    "volume": float(row['Volume'])
+                })
+            item_data["history_data"] = history_data
+
             results.append(item_data)
 
         except Exception:
