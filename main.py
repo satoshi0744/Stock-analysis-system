@@ -1,5 +1,7 @@
 import os
+import sys
 import smtplib
+import yfinance as yf
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
@@ -7,18 +9,18 @@ from watcher import analyze_watch_tickers
 from scanner import scan_b_type
 from report_generator import generate_files
 from performance_tracker import update_performance
-# ↓ 分析職人を呼び出す
 from analyze_performance import analyze
 
 JST = timezone(timedelta(hours=9))
 
-def send_email(text_body):
+def send_email(text_body, subject=None):
     user = os.environ.get("GMAIL_USER")
     pwd = os.environ.get("GMAIL_PASSWORD")
     if not user or not pwd: return
 
     msg = MIMEMultipart()
-    msg['Subject'] = f"投資戦略レポート [{datetime.now(JST).strftime('%m/%d')}]"
+    # 件名が指定されていなければデフォルトを使用
+    msg['Subject'] = subject if subject else f"投資戦略レポート [{datetime.now(JST).strftime('%m/%d')}]"
     msg['From'] = user
     msg['To'] = user
     msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
@@ -31,7 +33,46 @@ def send_email(text_body):
     except Exception:
         pass
 
+def check_market_updated():
+    """代表銘柄(7203 トヨタ)で当日のデータがyfinanceに反映されているかチェック"""
+    today_str = datetime.now(JST).strftime('%Y-%m-%d')
+    try:
+        # 7203.T (トヨタ) の直近5日分を取得
+        ticker = yf.Ticker("7203.T")
+        df = ticker.history(period="5d")
+        if df.empty:
+            return False, "データ取得失敗"
+        
+        # タイムゾーン情報を削除して文字列化
+        df.index = df.index.tz_localize(None)
+        latest_date = df.index[-1].strftime('%Y-%m-%d')
+        
+        if latest_date == today_str:
+            return True, latest_date
+        else:
+            return False, latest_date
+    except Exception as e:
+        return False, str(e)
+
 def main():
+    today_str = datetime.now(JST).strftime('%Y-%m-%d')
+    
+    # 0. 第一防衛線：データが「今日」のものか検証
+    is_updated, latest_date = check_market_updated()
+    
+    if not is_updated:
+        # 未更新なら警告メールを送って安全に終了（履歴保存や分析を一切行わない）
+        subject = f"🚨【警告】株価データ未更新 [{today_str}]"
+        body = f"本日（{today_str}）の株価データが提供元に未反映のため、\n"
+        body += f"分析と履歴の保存を安全に停止しました。\n\n"
+        body += f"最新取得日：{latest_date}\n\n"
+        body += "これはAPIの更新遅延によるものです。誤ったデータによる統計汚染を防ぐため処理を中断しました。\n"
+        body += "明日以降の実行時にデータが揃い次第、正常に再開されます。\n"
+        send_email(body, subject)
+        print(f"データ未更新のため終了します。最新データ日付: {latest_date}")
+        sys.exit(0) # ここでシステムを安全に停止
+
+    # --- 以下、既存の正常処理 ---
     # 1. 過去の履歴に翌日リターンを書き込む
     update_performance()
     # 2. リターンが書き込まれた履歴を集計し、勝率などを計算する
