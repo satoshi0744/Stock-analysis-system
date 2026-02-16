@@ -1,23 +1,15 @@
 {
-  "updated_at": "2026/02/15 23:22",
-  "date": "2026-02-15",
+  "updated_at": "2026/02/16 20:28",
+  "date": "2026-02-16",
   "watch_data": [
     {
       "code": "7203",
       "name": "トヨタ自動車",
-      "price": 3705,
+      "price": 3774,
       "position": "200日線上",
-      "rsi": 57.0,
+      "rsi": 58.4,
       "error": false,
       "history_data": [
-        {
-          "time": "2025-08-15",
-          "open": 2855.0,
-          "high": 2866.0,
-          "low": 2841.0,
-          "close": 2854.0,
-          "volume": 20036900.0
-        },
         {
           "time": "2025-08-18",
           "open": 2864.0,
@@ -969,92 +961,95 @@
           "low": 3630.0,
           "close": 3705.0,
           "volume": 27029000.0
+        },
+        {
+          "time": "2026-02-13",
+          "open": 3760.0,
+          "high": 3787.0,
+          "low": 3715.0,
+          "close": 3774.0,
+          "volume": 32482400.0
         }
       ]
     },
     {
       "code": "6758",
       "name": "ソニーグループ",
-      "price": 3605,
+      "price": 3552,
       "position": "200日線下",
-      "rsi": 48.6,
+      "rsi": 46.8,
       "error": false
     },
     {
       "code": "8411",
       "name": "みずほFG",
-      "price": 7867,
+      "price": 7681,
       "position": "200日線上",
-      "rsi": 76.2,
+      "rsi": 69.3,
       "error": false
     },
     {
       "code": "5020",
       "name": "ENEOS",
-      "price": 1488,
+      "price": 1425,
       "position": "200日線上",
-      "rsi": 79.8,
+      "rsi": 68.5,
       "error": false
     },
     {
       "code": "8058",
       "name": "三菱商事",
-      "price": 5164,
+      "price": 5058,
       "position": "200日線上",
-      "rsi": 85.6,
+      "rsi": 82.6,
       "error": false
     },
     {
       "code": "7011",
       "name": "三菱重工業",
-      "price": 4995,
+      "price": 5031,
       "position": "200日線上",
-      "rsi": 62.1,
+      "rsi": 68.3,
       "error": false
     },
     {
       "code": "9984",
       "name": "ソフトバンクG",
-      "price": 4817,
+      "price": 4390,
       "position": "200日線上",
-      "rsi": 61.4,
+      "rsi": 52.3,
       "error": false
     },
     {
       "code": "6146",
       "name": "ディスコ",
-      "price": 72830,
+      "price": 73060,
       "position": "200日線上",
-      "rsi": 56.0,
+      "rsi": 57.2,
       "error": false
     },
     {
       "code": "6857",
       "name": "アドバンテスト",
-      "price": 26810,
+      "price": 27130,
       "position": "200日線上",
-      "rsi": 63.8,
+      "rsi": 62.9,
       "error": false
     },
     {
       "code": "8306",
       "name": "三菱UFJ",
-      "price": 3085,
+      "price": 3003,
       "position": "200日線上",
-      "rsi": 67.1,
+      "rsi": 59.9,
       "error": false
     }
   ],
   "scan_data": [
     {
-      "code": "4063",
-      "price": 5741,
-      "vol_ratio": 2.8
-    },
-    {
-      "code": "4911",
-      "price": 3223,
-      "vol_ratio": 4.3
+      "code": "7201",
+      "price": 447,
+      "vol_ratio": 3.3
     }
   ]
 }
