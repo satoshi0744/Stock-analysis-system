@@ -132,14 +132,14 @@ def generate_files(watch_data, scan_data):
             if(item.history_data && document.getElementById('chart-' + item.code)) {{
                 const container = document.getElementById('chart-' + item.code);
                 
-                // チャートの初期化（V4安定版 ＋ 自動サイズ調整機能）
+                // チャートの初期化
                 const chart = LightweightCharts.createChart(container, {{
-                    autoSize: true, // 【NEW】スマホやウィンドウのサイズ変更に自動追従
+                    autoSize: true,
                     layout: {{ background: {{ type: 'solid', color: '#1e1e1e' }}, textColor: '#d1d4dc', }},
                     grid: {{ vertLines: {{ color: '#2b2b43' }}, horzLines: {{ color: '#2b2b43' }} }},
                     rightPriceScale: {{ borderColor: '#2b2b43' }},
-                    timeScale: {{ borderColor: '#2b2b43', timeVisible: true }}, // 【NEW】日付も表示させる
-                    handleScroll: false, // スマホでスクロール時に邪魔にならないよう無効化
+                    timeScale: {{ borderColor: '#2b2b43', timeVisible: true }},
+                    handleScroll: false,
                     handleScale: false
                 }});
 
@@ -149,25 +149,42 @@ def generate_files(watch_data, scan_data):
                     wickUpColor: '#26a69a', wickDownColor: '#ef5350'
                 }});
 
-                // V4仕様の出来高シリーズ追加（下部に重ねる）
+                // --- 【追加】移動平均線シリーズの追加 ---
+                const ma25Series = chart.addLineSeries({{
+                    color: '#2962FF',
+                    lineWidth: 1,
+                    title: 'MA25',
+                    lastValueVisible: false,
+                    priceLineVisible: false,
+                }});
+
+                const ma75Series = chart.addLineSeries({{
+                    color: '#FF5252',
+                    lineWidth: 1,
+                    title: 'MA75',
+                    lastValueVisible: false,
+                    priceLineVisible: false,
+                }});
+                // ------------------------------------
+
+                // V4仕様の出来高シリーズ追加
                 const volumeSeries = chart.addHistogramSeries({{
                     color: '#26a69a',
                     priceFormat: {{ type: 'volume' }},
-                    priceScaleId: 'volume_scale', // 【NEW】エラー防止のため明示的なIDを付与
+                    priceScaleId: 'volume_scale',
                 }});
                 
-                // 出来高グラフの高さをチャートの下20%に抑える
                 chart.priceScale('volume_scale').applyOptions({{
                     scaleMargins: {{ top: 0.8, bottom: 0 }},
                 }});
 
                 const candleData = [];
                 const volumeData = [];
-                let lastTime = ""; // 重複チェック用変数
+                const ma25Data = [];
+                const ma75Data = [];
+                let lastTime = "";
                 
-                // データのマッピング（JS側の安全装置付き）
                 item.history_data.forEach(d => {{
-                    // 【NEW】欠損値と重複日付をブロックする安全装置
                     if (d.open != null && d.close != null && d.time !== lastTime) {{
                         candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
                         volumeData.push({{
@@ -175,13 +192,26 @@ def generate_files(watch_data, scan_data):
                             value: d.volume || 0,
                             color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
                         }});
+
+                        // --- 【追加】MAデータのプッシュ ---
+                        if (d.ma25 !== undefined && d.ma25 !== null) {{
+                            ma25Data.push({{ time: d.time, value: d.ma25 }});
+                        }}
+                        if (d.ma75 !== undefined && d.ma75 !== null) {{
+                            ma75Data.push({{ time: d.time, value: d.ma75 }});
+                        }}
+                        // ------------------------------
+
                         lastTime = d.time;
                     }}
                 }});
 
-                // データをセットして表示範囲を調整
                 candleSeries.setData(candleData);
                 volumeSeries.setData(volumeData);
+                // --- 【追加】MAデータのセット ---
+                ma25Series.setData(ma25Data);
+                ma75Series.setData(ma75Data);
+                // ------------------------------
                 chart.timeScale().fitContent();
             }}
         }});
