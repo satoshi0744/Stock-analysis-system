@@ -2,7 +2,7 @@ name: Market Intelligence (Step 2)
 
 on:
   schedule:
-    - cron: '0 9 * * 1-5'
+  - cron: '45 10 * * 1-5'  # UTC 10:45 = JST 19:45に実行  
   workflow_dispatch:
 
 # Webページ（gh-pagesブランチ）を書き換えるための権限を許可
