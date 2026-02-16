@@ -32,6 +32,11 @@ def analyze_watch_tickers():
             
             # yfinance特有のタイムゾーン情報を削除して既存システムと合わせる
             df.index = df.index.tz_localize(None)
+
+            # --- 【追加】移動平均線の計算 ---
+            df['MA25'] = df['Close'].rolling(window=25).mean()
+            df['MA75'] = df['Close'].rolling(window=75).mean()
+            # ------------------------------
             
             latest = df.iloc[-1]
             sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
@@ -64,7 +69,11 @@ def analyze_watch_tickers():
                     "high": float(row['High']),
                     "low": float(row['Low']),
                     "close": float(row['Close']),
-                    "volume": float(row['Volume'])
+                    "volume": float(row['Volume']),
+                    # --- 【追加】MAデータの格納 ---
+                    "ma25": float(row['MA25']) if pd.notna(row['MA25']) else None,
+                    "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None
+                    # ----------------------------
                 })
             item_data["history_data"] = history_data
 
