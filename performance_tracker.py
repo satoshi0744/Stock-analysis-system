@@ -1,6 +1,6 @@
 import os
 import json
-import pandas_datareader.data as web
+import yfinance as yf
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
@@ -10,11 +10,18 @@ def calculate_return(signal_date, code, entry_price):
     try:
         start = datetime.strptime(signal_date, "%Y-%m-%d")
         end = start + timedelta(days=10)
+        
+        start_str = start.strftime('%Y-%m-%d')
+        end_str = end.strftime('%Y-%m-%d')
+        
+        # 【換装】yfinanceからデータを取得
+        ticker = yf.Ticker(f"{code}.T")
+        df = ticker.history(start=start_str, end=end_str)
 
-        df = web.DataReader(f"{code}.JP", "stooq", start, end).sort_index()
-
-        if len(df) < 2:
+        if df.empty or len(df) < 2:
             return None
+
+        df.index = df.index.tz_localize(None)
 
         next_close = df.iloc[1]["Close"]
         return round(((next_close - entry_price) / entry_price) * 100, 2)
@@ -39,7 +46,6 @@ def update_performance():
 
         signal_date = data.get("date")
 
-        # 当日ファイルはまだ翌日データがない可能性があるためスキップ
         if not signal_date or signal_date >= today:
             continue
 
