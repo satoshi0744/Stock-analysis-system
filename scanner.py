@@ -1,11 +1,9 @@
-import pandas_datareader.data as web
 import pandas as pd
+import yfinance as yf
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
 
-# スキャン対象（時価総額上位の代表的なプライム銘柄を初期セット。後から追加可能）
-# ※1600銘柄全件はタイムアウトのリスクがあるため、まずは流動性の高い100銘柄でエンジンをテストします
 SCAN_UNIVERSE = [
     "7203", "6758", "8306", "9984", "6861", "8035", "9432", "8058", "7974", "6146",
     "4063", "8411", "8316", "6920", "4568", "6857", "7011", "6098", "6501", "8002",
@@ -19,23 +17,32 @@ SCAN_UNIVERSE = [
     "8630", "3092", "4704", "7012", "6762", "6506", "8252", "4188", "4661", "7259"
 ]
 
-# （上の import と SCAN_UNIVERSE = [...] はそのまま残してください）
-
 def scan_b_type():
     results = []
     end = datetime.now(JST)
     start = end - timedelta(days=60) 
     
+    start_str = start.strftime('%Y-%m-%d')
+    end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
+    
     for code in SCAN_UNIVERSE:
         try:
-            df = web.DataReader(f"{code}.JP", "stooq", start, end).sort_index()
-            if len(df) < 25: continue
+            # 【換装】yfinanceからデータを取得
+            ticker = yf.Ticker(f"{code}.T")
+            df = ticker.history(start=start_str, end=end_str)
+            
+            if df.empty or len(df) < 25: 
+                continue
                 
+            df.index = df.index.tz_localize(None)
+            
             latest = df.iloc[-1]
             prev = df.iloc[-2]
             
             vol_avg20 = df['Volume'].rolling(window=20).mean().iloc[-2]
-            if vol_avg20 == 0 or pd.isna(vol_avg20): continue
+            
+            if vol_avg20 == 0 or pd.isna(vol_avg20): 
+                continue
                 
             vol_ratio = latest['Volume'] / vol_avg20
             
