@@ -12107,12 +12107,14 @@
     {
       "code": "4063",
       "price": 5741,
-      "vol_ratio": 2.8
+      "vol_ratio": 2.8,
+      "next_day_return": -4.22
     },
     {
       "code": "4911",
       "price": 3223,
-      "vol_ratio": 4.3
+      "vol_ratio": 4.3,
+      "next_day_return": 2.42
     }
   ]
 }

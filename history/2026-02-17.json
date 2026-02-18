@@ -12107,7 +12107,8 @@
     {
       "code": "5108",
       "price": 3585,
-      "vol_ratio": 2.5
+      "vol_ratio": 2.5,
+      "next_day_return": 1.87
     }
   ]
 }

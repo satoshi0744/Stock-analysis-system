@@ -12107,22 +12107,26 @@
     {
       "code": "6645",
       "price": 4921,
-      "vol_ratio": 3.1
+      "vol_ratio": 3.1,
+      "next_day_return": -1.04
     },
     {
       "code": "9735",
       "price": 6114,
-      "vol_ratio": 2.6
+      "vol_ratio": 2.6,
+      "next_day_return": 1.41
     },
     {
       "code": "1802",
       "price": 4290,
-      "vol_ratio": 3.1
+      "vol_ratio": 3.1,
+      "next_day_return": 1.05
     },
     {
       "code": "7012",
       "price": 16955,
-      "vol_ratio": 4.3
+      "vol_ratio": 4.3,
+      "next_day_return": 7.64
     }
   ]
 }
