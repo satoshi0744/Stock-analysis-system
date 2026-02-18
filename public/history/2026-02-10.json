@@ -12107,7 +12107,8 @@
     {
       "code": "8591",
       "price": 5429,
-      "vol_ratio": 2.7
+      "vol_ratio": 2.7,
+      "next_day_return": 3.48
     }
   ]
 }

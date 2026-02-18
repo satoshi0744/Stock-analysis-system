@@ -12107,7 +12107,8 @@
     {
       "code": "7201",
       "price": 447,
-      "vol_ratio": 3.3
+      "vol_ratio": 3.3,
+      "next_day_return": -2.15
     }
   ]
 }
