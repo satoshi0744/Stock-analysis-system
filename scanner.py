@@ -17,9 +17,17 @@ SCAN_UNIVERSE = [
     "8630", "3092", "4704", "7012", "6762", "6506", "8252", "4188", "4661", "7259"
 ]
 
-def scan_b_type():
+def scan_b_type(target_date_str=None):
     results = []
-    end = datetime.now(JST)
+    
+    # --- 【追加】タイムマシン・ロジック ---
+    if target_date_str:
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').replace(tzinfo=JST)
+        end = target_date + timedelta(hours=23, minutes=59)
+    else:
+        end = datetime.now(JST)
+    # ------------------------------------
+
     start = end - timedelta(days=60) 
     
     start_str = start.strftime('%Y-%m-%d')
