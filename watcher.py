@@ -14,24 +14,18 @@ WATCH_LIST = {
 def analyze_watch_tickers(target_date_str=None):
     results = []
     
-    # --- 【追加】タイムマシン・ロジック ---
     if target_date_str:
-        # 指定された日の 23:59 を仮想の「現在」とする
         target_date = datetime.strptime(target_date_str, '%Y-%m-%d').replace(tzinfo=JST)
         end = target_date + timedelta(hours=23, minutes=59)
     else:
         end = datetime.now(JST)
-    # ------------------------------------
 
     start = end - timedelta(days=400) 
-    
-    # yfinance用に文字列の日付を用意（endは含まれないため+1日する）
     start_str = start.strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     
     for code, name in WATCH_LIST.items():
         try:
-            # 【換装】yfinanceからデータを取得 (コード末尾は .T)
             ticker = yf.Ticker(f"{code}.T")
             df = ticker.history(start=start_str, end=end_str)
             
@@ -39,15 +33,14 @@ def analyze_watch_tickers(target_date_str=None):
                 results.append({"code": code, "name": name, "error": True, "error_msg": f"データ不足({len(df)}件)"})
                 continue
             
-            # yfinance特有のタイムゾーン情報を削除して既存システムと合わせる
             df.index = df.index.tz_localize(None)
 
-            # --- 【追加】移動平均線の計算 ---
             df['MA25'] = df['Close'].rolling(window=25).mean()
             df['MA75'] = df['Close'].rolling(window=75).mean()
-            # ------------------------------
             
             latest = df.iloc[-1]
+            prev = df.iloc[-2] # 【追加】前日のデータを取得
+            
             sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
             
             delta = df['Close'].diff()
@@ -58,12 +51,15 @@ def analyze_watch_tickers(target_date_str=None):
             
             position = "200日線上" if latest['Close'] >= sma200 else "200日線下"
             
+            # 【追加】前日比（現在値 - 前日終値）を計算
+            price_diff = int(latest['Close'] - prev['Close'])
+            
             item_data = {
                 "code": code, "name": name, "price": int(latest['Close']),
+                "price_diff": price_diff, # 【追加】前日比を保存
                 "position": position, "rsi": round(rsi, 1), "error": False
             }
 
-            # 全監視銘柄へチャート用データを展開
             df_clean = df.sort_index(ascending=True)
             df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
             df_clean['Volume'] = df_clean['Volume'].fillna(0)
@@ -79,13 +75,10 @@ def analyze_watch_tickers(target_date_str=None):
                     "low": float(row['Low']),
                     "close": float(row['Close']),
                     "volume": float(row['Volume']),
-                    # --- 【追加】MAデータの格納 ---
                     "ma25": float(row['MA25']) if pd.notna(row['MA25']) else None,
                     "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None
-                    # ----------------------------
                 })
             item_data["history_data"] = history_data
-
             results.append(item_data)
 
         except Exception:
