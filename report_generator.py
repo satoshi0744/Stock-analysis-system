@@ -26,13 +26,11 @@ def generate_files(watch_data, scan_data):
     with open(history_path, "w", encoding="utf-8") as f:
         json.dump(report_dict, f, ensure_ascii=False, indent=2)
 
-    # パフォーマンス集計データの読み込み
     summary = {"total_signals": 0, "win_rate": 0.0, "avg_return": 0.0, "expectancy": 0.0}
     if os.path.exists("public/performance_summary.json"):
         with open("public/performance_summary.json", "r", encoding="utf-8") as f:
             summary = json.load(f)
             
-    # HTML生成
     html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -63,8 +61,11 @@ def generate_files(watch_data, scan_data):
         .glossary dd {{ margin-left: 0; margin-bottom: 10px; color: #bbb; }}
         .error-text {{ color: #757575; font-style: italic; font-size: 0.9rem; }}
         .update-time {{ font-size: 0.85rem; color: #888; text-align: right; margin-top: -15px; margin-bottom: 15px; }}
-        /* 【NEW】チャート用コンテナのスタイル */
         .chart-container {{ width: 100%; height: 250px; margin-top: 15px; border: 1px solid #333; border-radius: 4px; overflow: hidden; }}
+        /* 【追加】前日比のカラースタイル（海外チャート基準：プラスが緑、マイナスが赤） */
+        .diff-up {{ color: #69f0ae; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
+        .diff-down {{ color: #ff5252; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
+        .diff-even {{ color: #9e9e9e; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
     </style>
 </head>
 <body>
@@ -79,11 +80,32 @@ def generate_files(watch_data, scan_data):
             <div class="stat-item"><div class="stat-value">{summary["avg_return"]}%</div><div class="stat-label">平均翌日リターン</div></div>
             <div class="stat-item"><div class="stat-value">{summary["expectancy"]}%</div><div class="stat-label">期待値</div></div>
         </div>
+        
+        <div style="font-size: 0.8rem; color: #9fa8da; margin-top: 15px; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; line-height: 1.5;">
+            <div style="font-weight:bold; margin-bottom:4px; color: #c5cae9;">💡 パフォーマンス指標の見方</div>
+            ・<strong>総シグナル数：</strong>「出来高2.5倍以上＋上昇」の条件を満たした銘柄の延べ数<br>
+            ・<strong>勝率：</strong>シグナル点灯の翌日に、株価がさらに上昇した確率<br>
+            ・<strong>平均翌日リターン：</strong>シグナル点灯の翌日に決済した場合の平均利益（%）<br>
+            ・<strong>期待値：</strong>1回のシグナルあたりに見込める平均的なリターン（%）
+        </div>
         <div style="font-size: 0.75rem; color: #7986cb; text-align: right; margin-top: 8px;">※翌日リターン確定分のみ集計</div>
     </div>
     
-    <h2>📋 監視銘柄の状況</h2>
+    <h2 style="color: #ffab00; border-left: 4px solid #ffab00;">🚀 本日の市場テーマ候補</h2>
+    <p style="font-size: 0.85rem; color: #888; margin-top:-5px; margin-bottom: 15px;">出来高20日平均の2.5倍以上 ＋ 上昇</p>
 """
+    if not scan_data:
+        html += '<div class="card"><div class="error-text">本日の該当銘柄なし（またはデータ取得スキップ）</div></div>'
+    else:
+        for item in scan_data:
+            # 【追加】企業名も表示するように変更
+            company_name = item.get("name", "")
+            html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
+            html += f'<div>終値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> <span class="badge badge-neutral" style="margin-left:10px;">出来高 {item["vol_ratio"]}倍</span></div></div>'
+            
+    # 3. 監視銘柄の状況（レイアウト変更：下に移動）
+    html += '<h2>📋 監視銘柄の状況</h2>'
+    
     for item in watch_data:
         html += '<div class="card">'
         if item["error"]:
@@ -91,26 +113,26 @@ def generate_files(watch_data, scan_data):
         else:
             pos_class = "badge-up" if "上" in item["position"] else "badge-down"
             rsi_class = "rsi-high" if item["rsi"] >= 70 else ("rsi-low" if item["rsi"] <= 30 else "")
+            
+            # 【追加】前日比の表示ロジック
+            diff = item.get("price_diff", 0)
+            if diff > 0:
+                diff_html = f'<span class="diff-up">(+{diff:,}円)</span>'
+            elif diff < 0:
+                diff_html = f'<span class="diff-down">({diff:,}円)</span>'
+            else:
+                diff_html = f'<span class="diff-even">(±0円)</span>'
+
             html += f'<div class="card-title">{item["code"]} {item["name"]}</div>'
-            html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong></div>'
+            # 現在値の横に前日比を追加
+            html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             html += f'<div style="margin-top:8px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
             
-            # 【NEW】配列データを持っている場合はチャート用の箱(div)を用意する
             if "history_data" in item:
                 html += f'<div id="chart-{item["code"]}" class="chart-container"></div>'
 
         html += '</div>'
 
-    html += '<h2>🚀 本日の市場テーマ候補</h2><p style="font-size: 0.85rem; color: #888; margin-top:-5px;">出来高20日平均の2.5倍以上 ＋ 上昇</p>'
-    
-    if not scan_data:
-        html += '<div class="card"><div class="error-text">本日の該当銘柄なし（またはデータ取得スキップ）</div></div>'
-    else:
-        for item in scan_data:
-            html += f'<div class="card highlight"><div class="card-title">コード: {item["code"]}</div>'
-            html += f'<div>終値: {item["price"]:,}円 <span class="badge badge-neutral" style="margin-left:10px;">出来高 {item["vol_ratio"]}倍</span></div></div>'
-            
-    # 【NEW】Pythonから渡されたデータをJSに渡し、チャートを描画する処理
     watch_data_json = json.dumps(watch_data, ensure_ascii=False)
     
     html += f"""
@@ -124,15 +146,10 @@ def generate_files(watch_data, scan_data):
     </div>
 
     <script>
-        // Pythonから出力された監視銘柄データを受け取る
         const watchData = {watch_data_json};
-        
         watchData.forEach(item => {{
-            // 履歴データが存在し、かつ描画用の枠がある場合のみ実行
             if(item.history_data && document.getElementById('chart-' + item.code)) {{
                 const container = document.getElementById('chart-' + item.code);
-                
-                // チャートの初期化
                 const chart = LightweightCharts.createChart(container, {{
                     autoSize: true,
                     layout: {{ background: {{ type: 'solid', color: '#1e1e1e' }}, textColor: '#d1d4dc', }},
@@ -143,37 +160,26 @@ def generate_files(watch_data, scan_data):
                     handleScale: false
                 }});
 
-                // V4仕様のローソク足シリーズ追加
                 const candleSeries = chart.addCandlestickSeries({{
                     upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
                     wickUpColor: '#26a69a', wickDownColor: '#ef5350'
                 }});
 
-                // --- 【追加】移動平均線シリーズの追加 ---
                 const ma25Series = chart.addLineSeries({{
-                    color: '#2962FF',
-                    lineWidth: 1,
-                    title: 'MA25',
-                    lastValueVisible: false,
-                    priceLineVisible: false,
+                    color: '#2962FF', lineWidth: 1, title: 'MA25',
+                    lastValueVisible: false, priceLineVisible: false,
                 }});
 
                 const ma75Series = chart.addLineSeries({{
-                    color: '#FF5252',
-                    lineWidth: 1,
-                    title: 'MA75',
-                    lastValueVisible: false,
-                    priceLineVisible: false,
+                    color: '#FF5252', lineWidth: 1, title: 'MA75',
+                    lastValueVisible: false, priceLineVisible: false,
                 }});
-                // ------------------------------------
 
-                // V4仕様の出来高シリーズ追加
                 const volumeSeries = chart.addHistogramSeries({{
-                    color: '#26a69a',
-                    priceFormat: {{ type: 'volume' }},
+                    color: '#26a69a', priceFormat: {{ type: 'volume' }},
                     priceScaleId: 'volume_scale',
                 }});
-                
+
                 chart.priceScale('volume_scale').applyOptions({{
                     scaleMargins: {{ top: 0.8, bottom: 0 }},
                 }});
@@ -183,35 +189,30 @@ def generate_files(watch_data, scan_data):
                 const ma25Data = [];
                 const ma75Data = [];
                 let lastTime = "";
-                
+
                 item.history_data.forEach(d => {{
                     if (d.open != null && d.close != null && d.time !== lastTime) {{
                         candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
                         volumeData.push({{
-                            time: d.time,
-                            value: d.volume || 0,
+                            time: d.time, value: d.volume || 0,
                             color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
                         }});
 
-                        // --- 【追加】MAデータのプッシュ ---
                         if (d.ma25 !== undefined && d.ma25 !== null) {{
                             ma25Data.push({{ time: d.time, value: d.ma25 }});
                         }}
                         if (d.ma75 !== undefined && d.ma75 !== null) {{
                             ma75Data.push({{ time: d.time, value: d.ma75 }});
                         }}
-                        // ------------------------------
-
                         lastTime = d.time;
                     }}
                 }});
 
                 candleSeries.setData(candleData);
                 volumeSeries.setData(volumeData);
-                // --- 【追加】MAデータのセット ---
                 ma25Series.setData(ma25Data);
                 ma75Series.setData(ma75Data);
-                // ------------------------------
+                
                 chart.timeScale().fitContent();
             }}
         }});
