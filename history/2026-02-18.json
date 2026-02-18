@@ -1,11 +1,12 @@
 {
-  "updated_at": "2026/02/18 21:14",
+  "updated_at": "2026/02/18 21:34",
   "date": "2026-02-18",
   "watch_data": [
     {
       "code": "7203",
       "name": "トヨタ自動車",
       "price": 3730,
+      "price_diff": 17,
       "position": "200日線上",
       "rsi": 74.3,
       "error": false,
@@ -1216,6 +1217,7 @@
       "code": "6758",
       "name": "ソニーグループ",
       "price": 3473,
+      "price_diff": -14,
       "position": "200日線下",
       "rsi": 53.6,
       "error": false,
@@ -2426,6 +2428,7 @@
       "code": "8411",
       "name": "みずほFG",
       "price": 7033,
+      "price_diff": 33,
       "position": "200日線上",
       "rsi": 57.3,
       "error": false,
@@ -3636,6 +3639,7 @@
       "code": "5020",
       "name": "ENEOS",
       "price": 1443,
+      "price_diff": 22,
       "position": "200日線上",
       "rsi": 71.9,
       "error": false,
@@ -4846,6 +4850,7 @@
       "code": "8058",
       "name": "三菱商事",
       "price": 4900,
+      "price_diff": 10,
       "position": "200日線上",
       "rsi": 77.9,
       "error": false,
@@ -6056,6 +6061,7 @@
       "code": "7011",
       "name": "三菱重工業",
       "price": 4952,
+      "price_diff": 132,
       "position": "200日線上",
       "rsi": 69.2,
       "error": false,
@@ -7266,6 +7272,7 @@
       "code": "9984",
       "name": "ソフトバンクG",
       "price": 4326,
+      "price_diff": -123,
       "position": "200日線上",
       "rsi": 52.2,
       "error": false,
@@ -8476,6 +8483,7 @@
       "code": "6146",
       "name": "ディスコ",
       "price": 71830,
+      "price_diff": 110,
       "position": "200日線上",
       "rsi": 52.1,
       "error": false,
@@ -9686,6 +9694,7 @@
       "code": "6857",
       "name": "アドバンテスト",
       "price": 26960,
+      "price_diff": 165,
       "position": "200日線上",
       "rsi": 55.7,
       "error": false,
@@ -10896,6 +10905,7 @@
       "code": "8306",
       "name": "三菱UFJ",
       "price": 2951,
+      "price_diff": 75,
       "position": "200日線上",
       "rsi": 61.5,
       "error": false,
@@ -12106,6 +12116,7 @@
   "scan_data": [
     {
       "code": "9009",
+      "name": "京成電鉄",
       "price": 1364,
       "vol_ratio": 2.7
     }
