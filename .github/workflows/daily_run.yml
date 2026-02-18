@@ -5,7 +5,6 @@ on:
   - cron: '45 10 * * 1-5'  # UTC 10:45 = JST 19:45に実行  
   workflow_dispatch:
 
-# Webページ（gh-pagesブランチ）を書き換えるための権限を許可
 permissions:
   contents: write
 
@@ -29,6 +28,16 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
         run: python main.py
+
+      # ==========================================
+      # 🚨 【追記】計算結果（履歴JSON）をmainブランチに保存して「記憶喪失」を防ぐ
+      # ==========================================
+      - name: Commit and Push Data to Main Branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "📊 [Daily Update] 市場データと履歴の更新" && git push)
 
       # 生成された public フォルダの中身（HTMLとJSON）を自動公開する
       - name: Deploy to GitHub Pages
