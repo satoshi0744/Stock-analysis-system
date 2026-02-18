@@ -11,9 +11,18 @@ WATCH_LIST = {
     "8306": "三菱UFJ"
 }
 
-def analyze_watch_tickers():
+def analyze_watch_tickers(target_date_str=None):
     results = []
-    end = datetime.now(JST)
+    
+    # --- 【追加】タイムマシン・ロジック ---
+    if target_date_str:
+        # 指定された日の 23:59 を仮想の「現在」とする
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').replace(tzinfo=JST)
+        end = target_date + timedelta(hours=23, minutes=59)
+    else:
+        end = datetime.now(JST)
+    # ------------------------------------
+
     start = end - timedelta(days=400) 
     
     # yfinance用に文字列の日付を用意（endは含まれないため+1日する）
