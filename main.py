@@ -85,25 +85,43 @@ def main():
     # 4. HTMLとJSONを生成する（ここで勝率データもHTMLに組み込まれる）
     generate_files(watch_data, scan_data)
     
-    body = "【📋 保有・監視銘柄の動向】\n"
+    # ==========================================
+    # 🚨 【修正】メール文面の順番入れ替えと情報追加
+    # ==========================================
+    
+    body = "【🚀 本日の市場テーマ候補】\n"
+    if scan_data:
+        for item in scan_data:
+            # 【追加】企業名 (name) を取得して表示
+            company_name = item.get("name", "")
+            body += f"・{item['code']} {company_name} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
+        body += "\n"
+    else:
+        body += "・本日の該当銘柄なし（またはスキップ）\n\n"
+
+    body += "【📋 監視銘柄の状況】\n"
     if watch_data:
         for item in watch_data:
             if item["error"]:
                 body += f"・{item['code']} {item['name']}: {item['error_msg']}\n"
             else:
-                body += f"・{item['code']} {item['name']}: {item['price']:,}円 ({item['position']} / RSI: {item['rsi']})\n"
+                # 【追加】前日比の計算と表示文字の作成
+                diff = item.get("price_diff", 0)
+                if diff > 0:
+                    diff_str = f"(+{diff:,}円)"
+                elif diff < 0:
+                    diff_str = f"({diff:,}円)"
+                else:
+                    diff_str = "(±0円)"
+                
+                # 前日比を価格の横に表示
+                body += f"・{item['code']} {item['name']}: {item['price']:,}円 {diff_str} ({item['position']} / RSI: {item['rsi']})\n"
         body += "\n"
     else:
         body += "・データなし\n\n"
-
-    body += "【🚀 本日の市場テーマ候補】\n"
-    if scan_data:
-        for item in scan_data:
-            body += f"・{item['code']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
-        body += "\n"
-    else:
-        body += "・本日の該当銘柄なし（またはスキップ）\n\n"
         
+    # ==========================================
+
     repo_path = os.environ.get("GITHUB_REPOSITORY", "your-username/your-repo")
     username = repo_path.split('/')[0] if '/' in repo_path else ""
     repo_name = repo_path.split('/')[1] if '/' in repo_path else ""
