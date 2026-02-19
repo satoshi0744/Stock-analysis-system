@@ -12118,7 +12118,8 @@
       "code": "9009",
       "name": "京成電鉄",
       "price": 1364,
-      "vol_ratio": 2.7
+      "vol_ratio": 2.7,
+      "next_day_return": -1.76
     }
   ]
 }
