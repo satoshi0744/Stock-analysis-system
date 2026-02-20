@@ -44,15 +44,18 @@ def generate_files(watch_data, scan_data):
         h2 {{ font-size: 1.1rem; margin-top: 25px; color: #4db8ff; border-left: 4px solid #4db8ff; padding-left: 8px; }}
         .card {{ background-color: #1e1e1e; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }}
         .card-title {{ font-weight: bold; font-size: 1.1rem; margin-bottom: 8px; color: #fff; }}
-        .badge {{ padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; }}
+        .badge {{ padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; display: inline-block; margin-bottom: 4px; }}
         .badge-up {{ background-color: #2e7d32; color: white; }}
         .badge-down {{ background-color: #c62828; color: white; }}
         .badge-neutral {{ background-color: #424242; color: white; }}
+        .badge-signal {{ background-color: #673ab7; color: white; border: 1px solid #9575cd; }}
         .rsi-high {{ color: #ff5252; font-weight: bold; }}
         .rsi-low {{ color: #69f0ae; font-weight: bold; }}
         .highlight {{ border-left: 4px solid #ffab00; background-color: #2a2a2a; }}
-        .stats-box {{ background-color: #1a237e; border: 1px solid #3949ab; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
-        .stats-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }}
+        .stats-box {{ background-color: #1a237e; border: 1px solid #3949ab; border-radius: 8px; padding: 15px; margin-bottom: 20px; transition: all 0.3s; }}
+        .stats-box summary {{ list-style: none; cursor: pointer; }}
+        .stats-box summary::-webkit-details-marker {{ display: none; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; }}
         .stat-item {{ text-align: center; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; }}
         .stat-value {{ font-size: 1.3rem; font-weight: bold; color: #fff; }}
         .stat-label {{ font-size: 0.75rem; color: #9fa8da; }}
@@ -65,7 +68,6 @@ def generate_files(watch_data, scan_data):
         .diff-up {{ color: #69f0ae; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
         .diff-down {{ color: #ff5252; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
         .diff-even {{ color: #9e9e9e; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
-        /* 【追加】リンクボタンのスタイル */
         .action-link {{ display: inline-block; padding: 6px 12px; margin-top: 12px; margin-right: 8px; background-color: #1a237e; color: #e8eaf6; text-decoration: none; border-radius: 4px; font-size: 0.85rem; font-weight: bold; border: 1px solid #3949ab; transition: all 0.2s; }}
         .action-link:hover {{ background-color: #3949ab; color: #fff; border-color: #5c6bc0; }}
     </style>
@@ -74,26 +76,7 @@ def generate_files(watch_data, scan_data):
     <h1>📊 投資戦略ダッシュボード</h1>
     <div class="update-time">最終更新: {now_str}</div>
 
-    <div class="stats-box">
-        <div style="font-weight:bold; color:#c5cae9; border-bottom:1px solid #3949ab; padding-bottom:5px;">📈 市場テーマ戦略（出来高急増） パフォーマンス検証</div>
-        <div class="stats-grid">
-            <div class="stat-item"><div class="stat-value">{summary["total_signals"]}</div><div class="stat-label">総シグナル数</div></div>
-            <div class="stat-item"><div class="stat-value">{summary["win_rate"]}%</div><div class="stat-label">勝率</div></div>
-            <div class="stat-item"><div class="stat-value">{summary["avg_return"]}%</div><div class="stat-label">平均翌日リターン</div></div>
-            <div class="stat-item"><div class="stat-value">{summary["expectancy"]}%</div><div class="stat-label">期待値</div></div>
-        </div>
-        <div style="font-size: 0.8rem; color: #9fa8da; margin-top: 15px; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; line-height: 1.5;">
-            <div style="font-weight:bold; margin-bottom:4px; color: #c5cae9;">💡 パフォーマンス指標の見方</div>
-            ・<strong>総シグナル数：</strong>「出来高2.5倍以上＋上昇」の条件を満たした銘柄の延べ数<br>
-            ・<strong>勝率：</strong>シグナル点灯の翌日に、株価がさらに上昇した確率<br>
-            ・<strong>平均翌日リターン：</strong>シグナル点灯の翌日に決済した場合の平均利益（%）<br>
-            ・<strong>期待値：</strong>1回のシグナルあたりに見込める平均的なリターン（%）
-        </div>
-        <div style="font-size: 0.75rem; color: #7986cb; text-align: right; margin-top: 8px;">※翌日リターン確定分のみ集計</div>
-    </div>
-    
-    <h2 style="color: #ffab00; border-left: 4px solid #ffab00;">🚀 本日の市場テーマ候補</h2>
-    <p style="font-size: 0.85rem; color: #888; margin-top:-5px; margin-bottom: 15px;">出来高20日平均の2.5倍以上 ＋ 上昇</p>
+    <h2 style="color: #ffab00; border-left: 4px solid #ffab00; margin-top: 5px;">🚀 本日の市場テーマ候補</h2>
 """
     if not scan_data:
         html += '<div class="card"><div class="error-text">本日の該当銘柄なし（またはデータ取得スキップ）</div></div>'
@@ -101,7 +84,6 @@ def generate_files(watch_data, scan_data):
         for item in scan_data:
             company_name = item.get("name", "")
             
-            # 前日比の表示ロジック
             diff = item.get("price_diff", 0)
             if diff > 0:
                 diff_html = f'<span class="diff-up">(+{diff:,}円)</span>'
@@ -111,18 +93,35 @@ def generate_files(watch_data, scan_data):
                 diff_html = f'<span class="diff-even">(±0円)</span>'
 
             html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
-            html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html} <span class="badge badge-neutral" style="margin-left:10px;">出来高 {item["vol_ratio"]}倍</span></div>'
+            html += f'<div style="margin-bottom: 8px;">現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             
-            # 外部リンクボタンの追加
+            # 【追加】シグナルバッジの表示枠
+            html += f'<div><span class="badge badge-signal">💡 出来高急増 ({item["vol_ratio"]}倍)</span></div>'
+            
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
-            # チャート用コンテナの追加
             if "history_data" in item:
                 html += f'<div id="chart-scan-{item["code"]}" class="chart-container"></div>'
             
             html += '</div>'
             
-    # 3. 監視銘柄の状況（下部へ移動）
+    # 2. パフォーマンス検証（候補の下へ移動 ＆ 折りたたみ式に変更）
+    html += f"""
+    <details class="stats-box">
+        <summary style="font-weight:bold; color:#c5cae9; outline: none;">📈 パフォーマンス検証データ（クリックで展開）</summary>
+        <div class="stats-grid">
+            <div class="stat-item"><div class="stat-value">{summary["total_signals"]}</div><div class="stat-label">総シグナル数</div></div>
+            <div class="stat-item"><div class="stat-value">{summary["win_rate"]}%</div><div class="stat-label">勝率</div></div>
+            <div class="stat-item"><div class="stat-value">{summary["avg_return"]}%</div><div class="stat-label">平均翌日リターン</div></div>
+            <div class="stat-item"><div class="stat-value">{summary["expectancy"]}%</div><div class="stat-label">期待値</div></div>
+        </div>
+        <div style="font-size: 0.8rem; color: #9fa8da; margin-top: 15px; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; line-height: 1.5;">
+            ※現在は「翌日リターン」で集計中。今後のアップデートでスイングトレード仕様に変更予定です。
+        </div>
+    </details>
+    """
+
+    # 3. 監視銘柄の状況
     html += '<h2>📋 監視銘柄の状況</h2>'
     
     for item in watch_data:
@@ -143,9 +142,8 @@ def generate_files(watch_data, scan_data):
 
             html += f'<div class="card-title">{item["code"]} {item["name"]}</div>'
             html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
-            html += f'<div style="margin-top:8px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
+            html += f'<div style="margin-top:8px; margin-bottom:4px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
             
-            # 外部リンクボタンの追加
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
             if "history_data" in item:
@@ -170,7 +168,6 @@ def generate_files(watch_data, scan_data):
         const watchData = {watch_data_json};
         const scanData = {scan_data_json};
         
-        // チャート描画用の共通関数
         function renderChart(item, prefix) {{
             const containerId = 'chart-' + prefix + '-' + item.code;
             if(item.history_data && document.getElementById(containerId)) {{
@@ -242,7 +239,6 @@ def generate_files(watch_data, scan_data):
             }}
         }}
 
-        // 監視銘柄と候補銘柄の両方でチャートを描画
         watchData.forEach(item => renderChart(item, 'watch'));
         scanData.forEach(item => renderChart(item, 'scan'));
     </script>
