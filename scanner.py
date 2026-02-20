@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
 
-# 【修正】リストから辞書型（企業名付き）へ大幅改修
 SCAN_UNIVERSE = {
     "7203": "トヨタ自動車", "6758": "ソニーG", "8306": "三菱UFJ", "9984": "ソフトバンクG", "6861": "キーエンス", "8035": "東エレク", "9432": "NTT", "8058": "三菱商事", "7974": "任天堂", "6146": "ディスコ",
     "4063": "信越化学", "8411": "みずほ", "8316": "三井住友", "6920": "レーザーテック", "4568": "第一三共", "6857": "アドバンテスト", "7011": "三菱重工", "6098": "リクルート", "6501": "日立", "8002": "丸紅",
@@ -27,11 +26,11 @@ def scan_b_type(target_date_str=None):
     else:
         end = datetime.now(JST)
 
-    start = end - timedelta(days=60) 
+    # チャート描画用に過去データ取得期間を延長（60日 -> 200日に変更）
+    start = end - timedelta(days=200) 
     start_str = start.strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     
-    # 【修正】辞書型に対応し、企業名（name）も取得する
     for code, name in SCAN_UNIVERSE.items():
         try:
             ticker = yf.Ticker(f"{code}.T")
@@ -52,9 +51,36 @@ def scan_b_type(target_date_str=None):
                 
             vol_ratio = latest['Volume'] / vol_avg20
             
+            # シグナル判定
             if vol_ratio >= 2.5 and latest['Close'] > prev['Close']:
-                # 【修正】結果に "name" を追加
-                results.append({"code": code, "name": name, "price": int(latest['Close']), "vol_ratio": round(vol_ratio, 1)})
-        except Exception:
-            pass
-    return results
+                # 前日比の計算
+                price_diff = int(latest['Close'] - prev['Close'])
+                
+                # チャート描画用のデータ生成（移動平均線含む）
+                df['MA25'] = df['Close'].rolling(window=25).mean()
+                df['MA75'] = df['Close'].rolling(window=75).mean()
+                
+                df_clean = df.sort_index(ascending=True)
+                df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
+                df_clean['Volume'] = df_clean['Volume'].fillna(0)
+                df_clean = df_clean.dropna(subset=['Open', 'High', 'Low', 'Close'])
+                
+                df_120 = df_clean.tail(120)
+                history_data = []
+                for date_index, row in df_120.iterrows():
+                    history_data.append({
+                        "time": date_index.strftime('%Y-%m-%d'),
+                        "open": float(row['Open']),
+                        "high": float(row['High']),
+                        "low": float(row['Low']),
+                        "close": float(row['Close']),
+                        "volume": float(row['Volume']),
+                        "ma25": float(row['MA25']) if pd.notna(row['MA25']) else None,
+                        "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None
+                    })
+
+                results.append({
+                    "code": code, 
+                    "name": name, 
+                    "price": int(latest['Close']), 
+                    "vol_ratio": round(vol_
