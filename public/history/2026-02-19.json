@@ -12118,7 +12118,8 @@
       "code": "4704",
       "name": "トレンドマイクロ",
       "price": 5832,
-      "vol_ratio": 3.1
+      "vol_ratio": 3.1,
+      "next_day_return": 0.0
     }
   ]
 }
