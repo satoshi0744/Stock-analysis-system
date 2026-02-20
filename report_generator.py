@@ -62,10 +62,12 @@ def generate_files(watch_data, scan_data):
         .error-text {{ color: #757575; font-style: italic; font-size: 0.9rem; }}
         .update-time {{ font-size: 0.85rem; color: #888; text-align: right; margin-top: -15px; margin-bottom: 15px; }}
         .chart-container {{ width: 100%; height: 250px; margin-top: 15px; border: 1px solid #333; border-radius: 4px; overflow: hidden; }}
-        /* 【追加】前日比のカラースタイル（海外チャート基準：プラスが緑、マイナスが赤） */
         .diff-up {{ color: #69f0ae; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
         .diff-down {{ color: #ff5252; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
         .diff-even {{ color: #9e9e9e; font-weight: bold; font-size: 0.95rem; margin-left: 5px; }}
+        /* 【追加】リンクボタンのスタイル */
+        .action-link {{ display: inline-block; padding: 6px 12px; margin-top: 12px; margin-right: 8px; background-color: #1a237e; color: #e8eaf6; text-decoration: none; border-radius: 4px; font-size: 0.85rem; font-weight: bold; border: 1px solid #3949ab; transition: all 0.2s; }}
+        .action-link:hover {{ background-color: #3949ab; color: #fff; border-color: #5c6bc0; }}
     </style>
 </head>
 <body>
@@ -80,7 +82,6 @@ def generate_files(watch_data, scan_data):
             <div class="stat-item"><div class="stat-value">{summary["avg_return"]}%</div><div class="stat-label">平均翌日リターン</div></div>
             <div class="stat-item"><div class="stat-value">{summary["expectancy"]}%</div><div class="stat-label">期待値</div></div>
         </div>
-        
         <div style="font-size: 0.8rem; color: #9fa8da; margin-top: 15px; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; line-height: 1.5;">
             <div style="font-weight:bold; margin-bottom:4px; color: #c5cae9;">💡 パフォーマンス指標の見方</div>
             ・<strong>総シグナル数：</strong>「出来高2.5倍以上＋上昇」の条件を満たした銘柄の延べ数<br>
@@ -98,12 +99,30 @@ def generate_files(watch_data, scan_data):
         html += '<div class="card"><div class="error-text">本日の該当銘柄なし（またはデータ取得スキップ）</div></div>'
     else:
         for item in scan_data:
-            # 【追加】企業名も表示するように変更
             company_name = item.get("name", "")
-            html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
-            html += f'<div>終値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> <span class="badge badge-neutral" style="margin-left:10px;">出来高 {item["vol_ratio"]}倍</span></div></div>'
             
-    # 3. 監視銘柄の状況（レイアウト変更：下に移動）
+            # 前日比の表示ロジック
+            diff = item.get("price_diff", 0)
+            if diff > 0:
+                diff_html = f'<span class="diff-up">(+{diff:,}円)</span>'
+            elif diff < 0:
+                diff_html = f'<span class="diff-down">({diff:,}円)</span>'
+            else:
+                diff_html = f'<span class="diff-even">(±0円)</span>'
+
+            html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
+            html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html} <span class="badge badge-neutral" style="margin-left:10px;">出来高 {item["vol_ratio"]}倍</span></div>'
+            
+            # 外部リンクボタンの追加
+            html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
+
+            # チャート用コンテナの追加
+            if "history_data" in item:
+                html += f'<div id="chart-scan-{item["code"]}" class="chart-container"></div>'
+            
+            html += '</div>'
+            
+    # 3. 監視銘柄の状況（下部へ移動）
     html += '<h2>📋 監視銘柄の状況</h2>'
     
     for item in watch_data:
@@ -114,7 +133,6 @@ def generate_files(watch_data, scan_data):
             pos_class = "badge-up" if "上" in item["position"] else "badge-down"
             rsi_class = "rsi-high" if item["rsi"] >= 70 else ("rsi-low" if item["rsi"] <= 30 else "")
             
-            # 【追加】前日比の表示ロジック
             diff = item.get("price_diff", 0)
             if diff > 0:
                 diff_html = f'<span class="diff-up">(+{diff:,}円)</span>'
@@ -124,16 +142,19 @@ def generate_files(watch_data, scan_data):
                 diff_html = f'<span class="diff-even">(±0円)</span>'
 
             html += f'<div class="card-title">{item["code"]} {item["name"]}</div>'
-            # 現在値の横に前日比を追加
             html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             html += f'<div style="margin-top:8px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
             
+            # 外部リンクボタンの追加
+            html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
+
             if "history_data" in item:
-                html += f'<div id="chart-{item["code"]}" class="chart-container"></div>'
+                html += f'<div id="chart-watch-{item["code"]}" class="chart-container"></div>'
 
         html += '</div>'
 
     watch_data_json = json.dumps(watch_data, ensure_ascii=False)
+    scan_data_json = json.dumps(scan_data, ensure_ascii=False)
     
     html += f"""
     <div class="glossary">
@@ -147,9 +168,13 @@ def generate_files(watch_data, scan_data):
 
     <script>
         const watchData = {watch_data_json};
-        watchData.forEach(item => {{
-            if(item.history_data && document.getElementById('chart-' + item.code)) {{
-                const container = document.getElementById('chart-' + item.code);
+        const scanData = {scan_data_json};
+        
+        // チャート描画用の共通関数
+        function renderChart(item, prefix) {{
+            const containerId = 'chart-' + prefix + '-' + item.code;
+            if(item.history_data && document.getElementById(containerId)) {{
+                const container = document.getElementById(containerId);
                 const chart = LightweightCharts.createChart(container, {{
                     autoSize: true,
                     layout: {{ background: {{ type: 'solid', color: '#1e1e1e' }}, textColor: '#d1d4dc', }},
@@ -215,7 +240,11 @@ def generate_files(watch_data, scan_data):
                 
                 chart.timeScale().fitContent();
             }}
-        }});
+        }}
+
+        // 監視銘柄と候補銘柄の両方でチャートを描画
+        watchData.forEach(item => renderChart(item, 'watch'));
+        scanData.forEach(item => renderChart(item, 'scan'));
     </script>
 </body></html>"""
     
