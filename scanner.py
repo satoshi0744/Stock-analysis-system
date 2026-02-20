@@ -83,4 +83,10 @@ def scan_b_type(target_date_str=None):
                     "code": code, 
                     "name": name, 
                     "price": int(latest['Close']), 
-                    "vol_ratio": round(vol_
+                    "vol_ratio": round(vol_ratio, 1),
+                    "price_diff": price_diff,
+                    "history_data": history_data
+                })
+        except Exception:
+            pass
+    return results
