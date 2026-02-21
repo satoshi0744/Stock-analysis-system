@@ -95,8 +95,12 @@ def generate_files(watch_data, scan_data):
             html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
             html += f'<div style="margin-bottom: 8px;">現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             
-            # 【追加】シグナルバッジの表示枠
-            html += f'<div><span class="badge badge-signal">💡 出来高急増 ({item["vol_ratio"]}倍)</span></div>'
+            # 【追加】動的シグナルバッジの表示
+            if item.get("signals"):
+                html += '<div>'
+                for sig in item["signals"]:
+                    html += f'<span class="badge badge-signal">{sig}</span>'
+                html += '</div>'
             
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
@@ -105,7 +109,7 @@ def generate_files(watch_data, scan_data):
             
             html += '</div>'
             
-    # 2. パフォーマンス検証（候補の下へ移動 ＆ 折りたたみ式に変更）
+    # 2. パフォーマンス検証
     html += f"""
     <details class="stats-box">
         <summary style="font-weight:bold; color:#c5cae9; outline: none;">📈 パフォーマンス検証データ（クリックで展開）</summary>
@@ -143,6 +147,13 @@ def generate_files(watch_data, scan_data):
             html += f'<div class="card-title">{item["code"]} {item["name"]}</div>'
             html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             html += f'<div style="margin-top:8px; margin-bottom:4px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
+            
+            # 【追加】監視銘柄にも動的シグナルバッジを表示
+            if item.get("signals"):
+                html += '<div style="margin-top: 4px; margin-bottom: 4px;">'
+                for sig in item["signals"]:
+                    html += f'<span class="badge badge-signal">{sig}</span>'
+                html += '</div>'
             
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
@@ -197,6 +208,12 @@ def generate_files(watch_data, scan_data):
                     lastValueVisible: false, priceLineVisible: false,
                 }});
 
+                // 【追加】200日移動平均線の描画（オレンジ色）
+                const ma200Series = chart.addLineSeries({{
+                    color: '#FF9800', lineWidth: 2, title: 'MA200',
+                    lastValueVisible: false, priceLineVisible: false,
+                }});
+
                 const volumeSeries = chart.addHistogramSeries({{
                     color: '#26a69a', priceFormat: {{ type: 'volume' }},
                     priceScaleId: 'volume_scale',
@@ -210,6 +227,7 @@ def generate_files(watch_data, scan_data):
                 const volumeData = [];
                 const ma25Data = [];
                 const ma75Data = [];
+                const ma200Data = []; // 追加
                 let lastTime = "";
 
                 item.history_data.forEach(d => {{
@@ -226,6 +244,10 @@ def generate_files(watch_data, scan_data):
                         if (d.ma75 !== undefined && d.ma75 !== null) {{
                             ma75Data.push({{ time: d.time, value: d.ma75 }});
                         }}
+                        // 💡【追加】MA200データのプッシュ
+                        if (d.ma200 !== undefined && d.ma200 !== null) {{
+                            ma200Data.push({{ time: d.time, value: d.ma200 }});
+                        }}
                         lastTime = d.time;
                     }}
                 }});
@@ -234,6 +256,7 @@ def generate_files(watch_data, scan_data):
                 volumeSeries.setData(volumeData);
                 ma25Series.setData(ma25Data);
                 ma75Series.setData(ma75Data);
+                ma200Series.setData(ma200Data); // 追加
                 
                 chart.timeScale().fitContent();
             }}
