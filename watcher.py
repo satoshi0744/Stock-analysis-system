@@ -4,11 +4,19 @@ from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
 
-WATCH_LIST = {
-    "7203": "トヨタ自動車", "6758": "ソニーグループ", "8411": "みずほFG",
-    "5020": "ENEOS", "8058": "三菱商事", "7011": "三菱重工業",
-    "9984": "ソフトバンクG", "6146": "ディスコ", "6857": "アドバンテスト",
-    "8306": "三菱UFJ"
+WATCH_TICKERS = {
+    "7203": "トヨタ自動車",
+    "6758": "ソニーグループ",
+    "8306": "三菱UFJ Fg",
+    "9984": "ソフトバンクG",
+    "6861": "キーエンス",
+    "8035": "東京エレクトロン",
+    "9432": "NTT",
+    "8058": "三菱商事",
+    "7974": "任天堂",
+    "6146": "ディスコ",
+    "4063": "信越化学工業",
+    "8411": "みずほFg"
 }
 
 def analyze_watch_tickers(target_date_str=None):
@@ -20,54 +28,61 @@ def analyze_watch_tickers(target_date_str=None):
     else:
         end = datetime.now(JST)
 
-    start = end - timedelta(days=400) 
+    # 200営業日分のデータを確保するため、過去300日分を取得
+    start = end - timedelta(days=300)
     start_str = start.strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
-    
-    for code, name in WATCH_LIST.items():
+
+    for code, name in WATCH_TICKERS.items():
         try:
             ticker = yf.Ticker(f"{code}.T")
             df = ticker.history(start=start_str, end=end_str)
             
             if df.empty or len(df) < 200:
-                results.append({"code": code, "name": name, "error": True, "error_msg": f"データ不足({len(df)}件)"})
+                results.append({"code": code, "name": name, "error": True, "error_msg": "データ不足（新規上場など）"})
                 continue
-            
+                
             df.index = df.index.tz_localize(None)
-
+            
             df['MA25'] = df['Close'].rolling(window=25).mean()
             df['MA75'] = df['Close'].rolling(window=75).mean()
-            
-            latest = df.iloc[-1]
-            prev = df.iloc[-2] # 【追加】前日のデータを取得
-            
-            sma200 = df['Close'].rolling(window=200).mean().iloc[-1]
+            df['MA200'] = df['Close'].rolling(window=200).mean() # 200日線追加
             
             delta = df['Close'].diff()
-            gain = delta.where(delta > 0, 0).rolling(window=14).mean().iloc[-1]
-            loss = -delta.where(delta < 0, 0).rolling(window=14).mean().iloc[-1]
-            rs = gain / loss if loss != 0 else 100
-            rsi = 100 - (100 / (1 + rs))
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df['RSI'] = 100 - (100 / (1 + rs))
             
-            position = "200日線上" if latest['Close'] >= sma200 else "200日線下"
+            latest = df.iloc[-1]
+            prev = df.iloc[-2]
             
-            # 【追加】前日比（現在値 - 前日終値）を計算
+            price = int(latest['Close'])
             price_diff = int(latest['Close'] - prev['Close'])
+            rsi = round(latest['RSI'], 1)
+            ma200 = latest['MA200']
             
-            item_data = {
-                "code": code, "name": name, "price": int(latest['Close']),
-                "price_diff": price_diff, # 【追加】前日比を保存
-                "position": position, "rsi": round(rsi, 1), "error": False
-            }
+            position = "200日線上" if price >= ma200 else "200日線下"
 
-            df_clean = df.sort_index(ascending=True)
-            df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
-            df_clean['Volume'] = df_clean['Volume'].fillna(0)
-            df_clean = df_clean.dropna(subset=['Open', 'High', 'Low', 'Close'])
+            # 💡 【追加】客観的イベントシグナルの検知
+            signals = []
             
-            df_120 = df_clean.tail(120)
+            # ゴールデンクロス発生（直近1〜2日で25日線が75日線を上抜け）
+            if prev['MA25'] <= prev['MA75'] and latest['MA25'] > latest['MA75']:
+                signals.append("🌟 ゴールデンクロス発生")
+            
+            # デッドクロス発生（直近1〜2日で25日線が75日線を下抜け）
+            if prev['MA25'] >= prev['MA75'] and latest['MA25'] < latest['MA75']:
+                signals.append("⚠️ デッドクロス発生")
+                
+            # 200日線での反発（安値が200日線に非常に近く、かつ前日比プラス）
+            if price > ma200 and latest['Low'] <= ma200 * 1.03 and price_diff > 0:
+                signals.append("🟩 200日線付近で反発")
+
+            # チャート描画用データ
+            df_clean = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(120)
             history_data = []
-            for date_index, row in df_120.iterrows():
+            for date_index, row in df_clean.iterrows():
                 history_data.append({
                     "time": date_index.strftime('%Y-%m-%d'),
                     "open": float(row['Open']),
@@ -76,12 +91,22 @@ def analyze_watch_tickers(target_date_str=None):
                     "close": float(row['Close']),
                     "volume": float(row['Volume']),
                     "ma25": float(row['MA25']) if pd.notna(row['MA25']) else None,
-                    "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None
+                    "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None,
+                    "ma200": float(row['MA200']) if pd.notna(row['MA200']) else None
                 })
-            item_data["history_data"] = history_data
-            results.append(item_data)
 
-        except Exception:
-            results.append({"code": code, "name": name, "error": True, "error_msg": "取得スキップ"})
+            results.append({
+                "code": code,
+                "name": name,
+                "price": price,
+                "price_diff": price_diff,
+                "rsi": rsi,
+                "position": position,
+                "signals": signals, # バッジ用データを追加
+                "history_data": history_data,
+                "error": False
+            })
+        except Exception as e:
+            results.append({"code": code, "name": name, "error": True, "error_msg": str(e)})
             
     return results
