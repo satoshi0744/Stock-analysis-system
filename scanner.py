@@ -26,7 +26,8 @@ def scan_b_type(target_date_str=None):
     else:
         end = datetime.now(JST)
 
-    start = end - timedelta(days=300) 
+    # 💡【修正】カレンダー500日分を取得
+    start = end - timedelta(days=500) 
     start_str = start.strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     
@@ -40,7 +41,6 @@ def scan_b_type(target_date_str=None):
                 
             df.index = df.index.tz_localize(None)
             
-            # 移動平均線の計算
             df['MA25'] = df['Close'].rolling(window=25).mean()
             df['MA75'] = df['Close'].rolling(window=75).mean()
             df['MA200'] = df['Close'].rolling(window=200).mean()
@@ -54,13 +54,11 @@ def scan_b_type(target_date_str=None):
                 
             vol_ratio = latest['Volume'] / vol_avg20
             
-            # シグナル判定（出来高急増＋上昇）
             if vol_ratio >= 2.5 and latest['Close'] > prev['Close']:
                 price_diff = int(latest['Close'] - prev['Close'])
                 price = int(latest['Close'])
                 ma200 = latest['MA200']
                 
-                # 💡 【追加】客観的イベントシグナルの検知
                 signals = [f"🔥 出来高急増 ({round(vol_ratio, 1)}倍)"]
                 
                 if prev['MA25'] <= prev['MA75'] and latest['MA25'] > latest['MA75']:
@@ -86,13 +84,8 @@ def scan_b_type(target_date_str=None):
                     })
 
                 results.append({
-                    "code": code, 
-                    "name": name, 
-                    "price": price, 
-                    "vol_ratio": round(vol_ratio, 1),
-                    "price_diff": price_diff,
-                    "signals": signals, # バッジ用データを追加
-                    "history_data": history_data
+                    "code": code, "name": name, "price": price, "vol_ratio": round(vol_ratio, 1),
+                    "price_diff": price_diff, "signals": signals, "history_data": history_data
                 })
         except Exception:
             pass
