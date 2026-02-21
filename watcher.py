@@ -5,18 +5,9 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=9))
 
 WATCH_TICKERS = {
-    "7203": "トヨタ自動車",
-    "6758": "ソニーグループ",
-    "8306": "三菱UFJ Fg",
-    "9984": "ソフトバンクG",
-    "6861": "キーエンス",
-    "8035": "東京エレクトロン",
-    "9432": "NTT",
-    "8058": "三菱商事",
-    "7974": "任天堂",
-    "6146": "ディスコ",
-    "4063": "信越化学工業",
-    "8411": "みずほFg"
+    "7203": "トヨタ自動車", "6758": "ソニーグループ", "8306": "三菱UFJ Fg", "9984": "ソフトバンクG", 
+    "6861": "キーエンス", "8035": "東京エレクトロン", "9432": "NTT", "8058": "三菱商事", 
+    "7974": "任天堂", "6146": "ディスコ", "4063": "信越化学工業", "8411": "みずほFg"
 }
 
 def analyze_watch_tickers(target_date_str=None):
@@ -28,8 +19,8 @@ def analyze_watch_tickers(target_date_str=None):
     else:
         end = datetime.now(JST)
 
-    # 200営業日分のデータを確保するため、過去300日分を取得
-    start = end - timedelta(days=300)
+    # 💡【修正】カレンダー500日分（約340営業日）を取得し、MA200を確実に計算させる
+    start = end - timedelta(days=500)
     start_str = start.strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
 
@@ -46,7 +37,7 @@ def analyze_watch_tickers(target_date_str=None):
             
             df['MA25'] = df['Close'].rolling(window=25).mean()
             df['MA75'] = df['Close'].rolling(window=75).mean()
-            df['MA200'] = df['Close'].rolling(window=200).mean() # 200日線追加
+            df['MA200'] = df['Close'].rolling(window=200).mean()
             
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -64,22 +55,14 @@ def analyze_watch_tickers(target_date_str=None):
             
             position = "200日線上" if price >= ma200 else "200日線下"
 
-            # 💡 【追加】客観的イベントシグナルの検知
             signals = []
-            
-            # ゴールデンクロス発生（直近1〜2日で25日線が75日線を上抜け）
             if prev['MA25'] <= prev['MA75'] and latest['MA25'] > latest['MA75']:
                 signals.append("🌟 ゴールデンクロス発生")
-            
-            # デッドクロス発生（直近1〜2日で25日線が75日線を下抜け）
             if prev['MA25'] >= prev['MA75'] and latest['MA25'] < latest['MA75']:
                 signals.append("⚠️ デッドクロス発生")
-                
-            # 200日線での反発（安値が200日線に非常に近く、かつ前日比プラス）
             if price > ma200 and latest['Low'] <= ma200 * 1.03 and price_diff > 0:
                 signals.append("🟩 200日線付近で反発")
 
-            # チャート描画用データ
             df_clean = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(120)
             history_data = []
             for date_index, row in df_clean.iterrows():
@@ -96,15 +79,9 @@ def analyze_watch_tickers(target_date_str=None):
                 })
 
             results.append({
-                "code": code,
-                "name": name,
-                "price": price,
-                "price_diff": price_diff,
-                "rsi": rsi,
-                "position": position,
-                "signals": signals, # バッジ用データを追加
-                "history_data": history_data,
-                "error": False
+                "code": code, "name": name, "price": price, "price_diff": price_diff,
+                "rsi": rsi, "position": position, "signals": signals,
+                "history_data": history_data, "error": False
             })
         except Exception as e:
             results.append({"code": code, "name": name, "error": True, "error_msg": str(e)})
