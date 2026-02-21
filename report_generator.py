@@ -252,4 +252,17 @@ def generate_files(watch_data, scan_data):
                 candleSeries.setData(candleData);
                 volumeSeries.setData(volumeData);
                 ma25Series.setData(ma25Data);
-                ma75Series.setData(ma75
+                ma75Series.setData(ma75Data);
+                ma200Series.setData(ma200Data);
+                
+                chart.timeScale().fitContent();
+            }}
+        }}
+
+        watchData.forEach(item => renderChart(item, 'watch'));
+        scanData.forEach(item => renderChart(item, 'scan'));
+    </script>
+</body></html>"""
+    
+    with open("public/index.html", "w", encoding="utf-8") as f:
+        f.write(html)
