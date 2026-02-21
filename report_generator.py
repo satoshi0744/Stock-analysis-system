@@ -95,7 +95,6 @@ def generate_files(watch_data, scan_data):
             html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
             html += f'<div style="margin-bottom: 8px;">現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             
-            # 【追加】動的シグナルバッジの表示
             if item.get("signals"):
                 html += '<div>'
                 for sig in item["signals"]:
@@ -148,7 +147,6 @@ def generate_files(watch_data, scan_data):
             html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
             html += f'<div style="margin-top:8px; margin-bottom:4px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
             
-            # 【追加】監視銘柄にも動的シグナルバッジを表示
             if item.get("signals"):
                 html += '<div style="margin-top: 4px; margin-bottom: 4px;">'
                 for sig in item["signals"]:
@@ -208,7 +206,7 @@ def generate_files(watch_data, scan_data):
                     lastValueVisible: false, priceLineVisible: false,
                 }});
 
-                // 【追加】200日移動平均線の描画（オレンジ色）
+                // 200日移動平均線の描画（オレンジ色）
                 const ma200Series = chart.addLineSeries({{
                     color: '#FF9800', lineWidth: 2, title: 'MA200',
                     lastValueVisible: false, priceLineVisible: false,
@@ -227,7 +225,7 @@ def generate_files(watch_data, scan_data):
                 const volumeData = [];
                 const ma25Data = [];
                 const ma75Data = [];
-                const ma200Data = []; // 追加
+                const ma200Data = [];
                 let lastTime = "";
 
                 item.history_data.forEach(d => {{
@@ -244,7 +242,6 @@ def generate_files(watch_data, scan_data):
                         if (d.ma75 !== undefined && d.ma75 !== null) {{
                             ma75Data.push({{ time: d.time, value: d.ma75 }});
                         }}
-                        // 💡【追加】MA200データのプッシュ
                         if (d.ma200 !== undefined && d.ma200 !== null) {{
                             ma200Data.push({{ time: d.time, value: d.ma200 }});
                         }}
@@ -255,17 +252,4 @@ def generate_files(watch_data, scan_data):
                 candleSeries.setData(candleData);
                 volumeSeries.setData(volumeData);
                 ma25Series.setData(ma25Data);
-                ma75Series.setData(ma75Data);
-                ma200Series.setData(ma200Data); // 追加
-                
-                chart.timeScale().fitContent();
-            }}
-        }}
-
-        watchData.forEach(item => renderChart(item, 'watch'));
-        scanData.forEach(item => renderChart(item, 'scan'));
-    </script>
-</body></html>"""
-    
-    with open("public/index.html", "w", encoding="utf-8") as f:
-        f.write(html)
+                ma75Series.setData(ma75
