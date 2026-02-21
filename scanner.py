@@ -26,8 +26,7 @@ def scan_b_type(target_date_str=None):
     else:
         end = datetime.now(JST)
 
-    # チャート描画用に過去データ取得期間を延長（60日 -> 200日に変更）
-    start = end - timedelta(days=200) 
+    start = end - timedelta(days=300) 
     start_str = start.strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     
@@ -36,38 +35,44 @@ def scan_b_type(target_date_str=None):
             ticker = yf.Ticker(f"{code}.T")
             df = ticker.history(start=start_str, end=end_str)
             
-            if df.empty or len(df) < 25: 
+            if df.empty or len(df) < 200: 
                 continue
                 
             df.index = df.index.tz_localize(None)
+            
+            # 移動平均線の計算
+            df['MA25'] = df['Close'].rolling(window=25).mean()
+            df['MA75'] = df['Close'].rolling(window=75).mean()
+            df['MA200'] = df['Close'].rolling(window=200).mean()
             
             latest = df.iloc[-1]
             prev = df.iloc[-2]
             
             vol_avg20 = df['Volume'].rolling(window=20).mean().iloc[-2]
-            
             if vol_avg20 == 0 or pd.isna(vol_avg20): 
                 continue
                 
             vol_ratio = latest['Volume'] / vol_avg20
             
-            # シグナル判定
+            # シグナル判定（出来高急増＋上昇）
             if vol_ratio >= 2.5 and latest['Close'] > prev['Close']:
-                # 前日比の計算
                 price_diff = int(latest['Close'] - prev['Close'])
+                price = int(latest['Close'])
+                ma200 = latest['MA200']
                 
-                # チャート描画用のデータ生成（移動平均線含む）
-                df['MA25'] = df['Close'].rolling(window=25).mean()
-                df['MA75'] = df['Close'].rolling(window=75).mean()
+                # 💡 【追加】客観的イベントシグナルの検知
+                signals = [f"🔥 出来高急増 ({round(vol_ratio, 1)}倍)"]
                 
-                df_clean = df.sort_index(ascending=True)
-                df_clean = df_clean[~df_clean.index.duplicated(keep='last')].copy()
-                df_clean['Volume'] = df_clean['Volume'].fillna(0)
-                df_clean = df_clean.dropna(subset=['Open', 'High', 'Low', 'Close'])
+                if prev['MA25'] <= prev['MA75'] and latest['MA25'] > latest['MA75']:
+                    signals.append("🌟 ゴールデンクロス発生")
+                if prev['MA25'] >= prev['MA75'] and latest['MA25'] < latest['MA75']:
+                    signals.append("⚠️ デッドクロス発生")
+                if price > ma200 and latest['Low'] <= ma200 * 1.03 and price_diff > 0:
+                    signals.append("🟩 200日線付近で反発")
                 
-                df_120 = df_clean.tail(120)
+                df_clean = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(120)
                 history_data = []
-                for date_index, row in df_120.iterrows():
+                for date_index, row in df_clean.iterrows():
                     history_data.append({
                         "time": date_index.strftime('%Y-%m-%d'),
                         "open": float(row['Open']),
@@ -76,15 +81,17 @@ def scan_b_type(target_date_str=None):
                         "close": float(row['Close']),
                         "volume": float(row['Volume']),
                         "ma25": float(row['MA25']) if pd.notna(row['MA25']) else None,
-                        "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None
+                        "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None,
+                        "ma200": float(row['MA200']) if pd.notna(row['MA200']) else None
                     })
 
                 results.append({
                     "code": code, 
                     "name": name, 
-                    "price": int(latest['Close']), 
+                    "price": price, 
                     "vol_ratio": round(vol_ratio, 1),
                     "price_diff": price_diff,
+                    "signals": signals, # バッジ用データを追加
                     "history_data": history_data
                 })
         except Exception:
