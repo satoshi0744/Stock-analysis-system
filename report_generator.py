@@ -278,4 +278,7 @@ def generate_files(watch_data, scan_data_dict):
         watchData.forEach(item => renderChart(item, 'watch'));
         scanData.forEach(item => renderChart(item, 'scan'));
     </script>
-</body></html>
+</body></html>"""
+    
+    with open("public/index.html", "w", encoding="utf-8") as f:
+        f.write(html)
