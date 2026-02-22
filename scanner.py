@@ -26,7 +26,10 @@ def check_market_trend(start_str, end_str):
             return False, "判定不能"
         df['MA200'] = df['Close'].rolling(window=200).mean()
         latest = df.iloc[-1]
-        is_good = latest['Close'] > latest['MA200']
+        
+        # 💡 ここが修正箇所です（bool()で囲んで標準のTrue/Falseに変換）
+        is_good = bool(latest['Close'] > latest['MA200'])
+        
         text = "🟩 良好 (日経平均 200日線上)" if is_good else "⚠️ 警戒 (日経平均 200日線下)"
         return is_good, text
     except:
@@ -100,7 +103,7 @@ def scan_b_type(target_date_str=None):
                     })
 
                 item_data = {
-                    "code": code, "name": name, "price": price, "vol_ratio": round(vol_ratio, 1),
+                    "code": code, "name": name, "price": price, "vol_ratio": round(float(vol_ratio), 1),
                     "price_diff": price_diff, "signals": signals, "history_data": history_data
                 }
                 
@@ -113,7 +116,6 @@ def scan_b_type(target_date_str=None):
         except Exception:
             pass
             
-    # 返り値を「地合い」「A群」「B群」の辞書型に変更
     return {
         "market_info": {"is_good": is_good_market, "text": market_text},
         "scan_a": scan_a,
