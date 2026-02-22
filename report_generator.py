@@ -85,7 +85,7 @@ def generate_files(watch_data, scan_data_dict):
         <strong style="font-size: 1.1rem; color: #fff;">{market_info['text']}</strong>
     </div>
 
-    <h2 style="color: #ffab00; border-left: 4px solid #ffab00; margin-top: 5px;">👑 本日の本命候補 (A群)</h2>
+    <h2 style="color: #ffab00; border-left: 4px solid #ffab00; margin-top: 5px;">👑 本日の条件達成銘柄</h2>
 """
     if not scan_a:
         html += '<div class="card"><div class="error-text">本日の鉄板条件クリア銘柄なし（休むも相場です）</div></div>'
@@ -110,11 +110,11 @@ def generate_files(watch_data, scan_data_dict):
                 html += f'<div id="chart-scan-{item["code"]}" class="chart-container"></div>'
             html += '</div>'
 
-    # 📝 2. B群（次点・研究用）の折りたたみ表示
+    # 📝 2. B群（次点・監視用ログ）の折りたたみ表示
     if scan_b:
         html += f"""
         <details class="b-group-box">
-            <summary style="font-weight:bold; color:#888; outline: none; cursor:pointer;">📁 本日の次点候補（研究用ログ: {len(scan_b)}件）</summary>
+            <summary style="font-weight:bold; color:#888; outline: none; cursor:pointer;">📁 次点・監視用ログ（{len(scan_b)}件）</summary>
             <div style="margin-top: 15px;">
         """
         for item in scan_b:
@@ -133,7 +133,7 @@ def generate_files(watch_data, scan_data_dict):
     # 📈 パフォーマンス検証
     html += f"""
     <details class="stats-box">
-        <summary>📈 A群シグナル検証データ（5営業日スイング）</summary>
+        <summary>📈 条件達成銘柄の検証データ（5営業日スイング）</summary>
         <div class="stats-grid">
             <div class="stat-item"><div class="stat-value">{summary["total_signals"]}</div><div class="stat-label">総シグナル数</div></div>
             <div class="stat-item"><div class="stat-value">{summary["win_rate"]}%</div><div class="stat-label">勝率</div></div>
@@ -186,7 +186,7 @@ def generate_files(watch_data, scan_data_dict):
         <dl>
             <dt>RSI（相対力指数）</dt><dd>株価の過熱感を指数化したもの。70％以上買われすぎ、30％以下売られすぎ。</dd>
             <dt>200日線（移動平均線）</dt><dd>過去200営業日（約1年）の平均。長期トレンドの最重要ライン。</dd>
-            <dt>出来高急増（動意）</dt><dd>大口資金が流入し、新たなテーマが始まる初初動サイン。</dd>
+            <dt>出来高急増（動意）</dt><dd>大口資金が流入し、新たなテーマが始まる初動サイン。</dd>
         </dl>
     </div>
 
