@@ -49,7 +49,7 @@ def main():
     
     body = f"【📈 本日の相場環境】\n{market_info.get('text', '')}\n\n"
     
-    body += "【👑 本日の本命候補 (A群)】\n"
+    body += "【👑 本日の条件達成銘柄】\n"
     if scan_a:
         for item in scan_a:
             body += f"・{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
@@ -58,7 +58,7 @@ def main():
         body += "・本日の鉄板条件クリア銘柄なし（休むも相場です）\n\n"
         
     if scan_b:
-        body += f"※次点候補(B群)が {len(scan_b)} 件あります。詳細はダッシュボードの折りたたみから確認してください。\n\n"
+        body += f"※次点・監視用ログが {len(scan_b)} 件あります。詳細はダッシュボードの折りたたみから確認してください。\n\n"
 
     body += "【📋 監視銘柄の状況】\n"
     if watch_data:
