@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from watcher import analyze_watch_tickers
 from scanner import scan_b_type
 from report_generator import generate_files
-from performance_tracker import update_performance
 from analyze_performance import analyze
 
 JST = timezone(timedelta(hours=9))
@@ -66,7 +65,6 @@ def main():
         print(f"データ未更新のため終了します。最新データ日付: {latest_date}")
         sys.exit(0)
 
-    update_performance()
     analyze()
     
     watch_data = analyze_watch_tickers()
