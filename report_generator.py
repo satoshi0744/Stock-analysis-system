@@ -167,4 +167,115 @@ def generate_files(watch_data, scan_data_dict):
             if item.get("signals"):
                 html += '<div style="margin-top: 4px; margin-bottom: 4px;">'
                 for sig in item["signals"]:
-                    html += f'<span class="badge badge-signal
+                    html += f'<span class="badge badge-signal">{sig}</span>'
+                html += '</div>'
+            
+            html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
+
+            if "history_data" in item:
+                html += f'<div id="chart-watch-{item["code"]}" class="chart-container"></div>'
+
+        html += '</div>'
+
+    watch_data_json = json.dumps(watch_data, ensure_ascii=False)
+    scan_a_json = json.dumps(scan_a, ensure_ascii=False)
+    
+    html += f"""
+    <div class="glossary">
+        <div style="font-weight:bold; font-size:1rem; margin-bottom:8px; border-bottom:1px solid #333; padding-bottom:5px;">💡 投資用語メモ</div>
+        <dl>
+            <dt>RSI（相対力指数）</dt><dd>株価の過熱感を指数化したもの。70％以上買われすぎ、30％以下売られすぎ。</dd>
+            <dt>200日線（移動平均線）</dt><dd>過去200営業日（約1年）の平均。長期トレンドの最重要ライン。</dd>
+            <dt>出来高急増（動意）</dt><dd>大口資金が流入し、新たなテーマが始まる初初動サイン。</dd>
+        </dl>
+    </div>
+
+    <script>
+        const watchData = {watch_data_json};
+        const scanData = {scan_a_json};
+        
+        function renderChart(item, prefix) {{
+            const containerId = 'chart-' + prefix + '-' + item.code;
+            if(item.history_data && document.getElementById(containerId)) {{
+                const container = document.getElementById(containerId);
+                const chart = LightweightCharts.createChart(container, {{
+                    autoSize: true,
+                    layout: {{ background: {{ type: 'solid', color: '#1e1e1e' }}, textColor: '#d1d4dc', }},
+                    grid: {{ vertLines: {{ color: '#2b2b43' }}, horzLines: {{ color: '#2b2b43' }} }},
+                    rightPriceScale: {{ borderColor: '#2b2b43' }},
+                    timeScale: {{ borderColor: '#2b2b43', timeVisible: true }},
+                    handleScroll: false,
+                    handleScale: false
+                }});
+
+                const candleSeries = chart.addCandlestickSeries({{
+                    upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+                    wickUpColor: '#26a69a', wickDownColor: '#ef5350'
+                }});
+
+                const ma25Series = chart.addLineSeries({{
+                    color: '#2962FF', lineWidth: 1, title: 'MA25',
+                    lastValueVisible: false, priceLineVisible: false,
+                }});
+
+                const ma75Series = chart.addLineSeries({{
+                    color: '#FF5252', lineWidth: 1, title: 'MA75',
+                    lastValueVisible: false, priceLineVisible: false,
+                }});
+
+                const ma200Series = chart.addLineSeries({{
+                    color: '#FF9800', lineWidth: 2, title: 'MA200',
+                    lastValueVisible: false, priceLineVisible: false,
+                }});
+
+                const volumeSeries = chart.addHistogramSeries({{
+                    color: '#26a69a', priceFormat: {{ type: 'volume' }},
+                    priceScaleId: 'volume_scale',
+                }});
+
+                chart.priceScale('volume_scale').applyOptions({{
+                    scaleMargins: {{ top: 0.8, bottom: 0 }},
+                }});
+
+                const candleData = [];
+                const volumeData = [];
+                const ma25Data = [];
+                const ma75Data = [];
+                const ma200Data = [];
+                let lastTime = "";
+
+                item.history_data.forEach(d => {{
+                    if (d.open != null && d.close != null && d.time !== lastTime) {{
+                        candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
+                        volumeData.push({{
+                            time: d.time, value: d.volume || 0,
+                            color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                        }});
+
+                        if (d.ma25 !== undefined && d.ma25 !== null) {{
+                            ma25Data.push({{ time: d.time, value: d.ma25 }});
+                        }}
+                        if (d.ma75 !== undefined && d.ma75 !== null) {{
+                            ma75Data.push({{ time: d.time, value: d.ma75 }});
+                        }}
+                        if (d.ma200 !== undefined && d.ma200 !== null) {{
+                            ma200Data.push({{ time: d.time, value: d.ma200 }});
+                        }}
+                        lastTime = d.time;
+                    }}
+                }});
+
+                candleSeries.setData(candleData);
+                volumeSeries.setData(volumeData);
+                ma25Series.setData(ma25Data);
+                ma75Series.setData(ma75Data);
+                ma200Series.setData(ma200Data);
+                
+                chart.timeScale().fitContent();
+            }}
+        }}
+
+        watchData.forEach(item => renderChart(item, 'watch'));
+        scanData.forEach(item => renderChart(item, 'scan'));
+    </script>
+</body></html>
