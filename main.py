@@ -31,48 +31,18 @@ def send_email(text_body, subject=None):
     except Exception:
         pass
 
-def check_market_updated():
-    today_str = datetime.now(JST).strftime('%Y-%m-%d')
-    try:
-        ticker = yf.Ticker("7203.T")
-        df = ticker.history(period="5d")
-        if df.empty:
-            return False, "データ取得失敗"
-        
-        df.index = df.index.tz_localize(None)
-        latest_date = df.index[-1].strftime('%Y-%m-%d')
-        
-        if latest_date == today_str:
-            return True, latest_date
-        else:
-            return False, latest_date
-    except Exception as e:
-        return False, str(e)
-
 def main():
-    today_str = datetime.now(JST).strftime('%Y-%m-%d')
-    
-    is_updated, latest_date = check_market_updated()
-    
-    if not is_updated:
-        subject = f"🚨【警告】株価データ未更新 [{today_str}]"
-        body = f"本日（{today_str}）の株価データが提供元に未反映のため、\n"
-        body += f"分析と履歴の保存を安全に停止しました。\n\n"
-        body += f"最新取得日：{latest_date}\n\n"
-        body += "これはAPIの更新遅延によるものです。誤ったデータによる統計汚染を防ぐため処理を中断しました。\n"
-        body += "明日以降の実行時にデータが揃い次第、正常に再開されます。\n"
-        send_email(body, subject)
-        print(f"データ未更新のため終了します。最新データ日付: {latest_date}")
-        sys.exit(0)
+    # 【テスト用】休日フィルターを無効化し、強制実行します
+    print("🔧 テストモード: 休日フィルターをスキップします")
 
+    # 💡 5日後スイングシミュレーターの実行
     analyze()
     
     watch_data = analyze_watch_tickers()
-    scan_dict = scan_b_type() # ここが辞書で返ってくるように変更
+    scan_dict = scan_b_type()
     
     generate_files(watch_data, scan_dict)
     
-    # 💡 メール本文の組み立て（地合い・A群・B群対応）
     market_info = scan_dict.get("market_info", {})
     scan_a = scan_dict.get("scan_a", [])
     scan_b = scan_dict.get("scan_b", [])
