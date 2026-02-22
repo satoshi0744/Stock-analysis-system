@@ -70,18 +70,27 @@ def main():
     analyze()
     
     watch_data = analyze_watch_tickers()
-    scan_data = scan_b_type()
+    scan_dict = scan_b_type() # ここが辞書で返ってくるように変更
     
-    generate_files(watch_data, scan_data)
+    generate_files(watch_data, scan_dict)
     
-    body = "【🚀 本日の市場テーマ候補】\n"
-    if scan_data:
-        for item in scan_data:
-            company_name = item.get("name", "")
-            body += f"・{item['code']} {company_name} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
+    # 💡 メール本文の組み立て（地合い・A群・B群対応）
+    market_info = scan_dict.get("market_info", {})
+    scan_a = scan_dict.get("scan_a", [])
+    scan_b = scan_dict.get("scan_b", [])
+    
+    body = f"【📈 本日の相場環境】\n{market_info.get('text', '')}\n\n"
+    
+    body += "【👑 本日の本命候補 (A群)】\n"
+    if scan_a:
+        for item in scan_a:
+            body += f"・{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
         body += "\n"
     else:
-        body += "・本日の該当銘柄なし（またはスキップ）\n\n"
+        body += "・本日の鉄板条件クリア銘柄なし（休むも相場です）\n\n"
+        
+    if scan_b:
+        body += f"※次点候補(B群)が {len(scan_b)} 件あります。詳細はダッシュボードの折りたたみから確認してください。\n\n"
 
     body += "【📋 監視銘柄の状況】\n"
     if watch_data:
@@ -90,13 +99,7 @@ def main():
                 body += f"・{item['code']} {item['name']}: {item['error_msg']}\n"
             else:
                 diff = item.get("price_diff", 0)
-                if diff > 0:
-                    diff_str = f"(+{diff:,}円)"
-                elif diff < 0:
-                    diff_str = f"({diff:,}円)"
-                else:
-                    diff_str = "(±0円)"
-                
+                diff_str = f"(+{diff:,}円)" if diff > 0 else (f"({diff:,}円)" if diff < 0 else "(±0円)")
                 body += f"・{item['code']} {item['name']}: {item['price']:,}円 {diff_str} ({item['position']} / RSI: {item['rsi']})\n"
         body += "\n"
     else:
@@ -108,7 +111,6 @@ def main():
     pages_url = f"https://{username}.github.io/{repo_name}/"
     
     body += f"📱 スマホ用Webダッシュボードはこちら:\n{pages_url}\n\n"
-    
     body += "-" * 40 + "\n【💡 投資用語メモ】\n"
     body += "・RSI：過熱感の指標（70以上買われすぎ、30以下売られすぎ）。\n"
     body += "・200日線：過去約1年の平均。長期トレンドの最重要ライン。\n"
