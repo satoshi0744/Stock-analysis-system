@@ -31,9 +31,40 @@ def send_email(text_body, subject=None):
     except Exception:
         pass
 
+def check_market_updated():
+    today_str = datetime.now(JST).strftime('%Y-%m-%d')
+    try:
+        ticker = yf.Ticker("7203.T")
+        df = ticker.history(period="5d")
+        if df.empty:
+            return False, "データ取得失敗"
+        
+        df.index = df.index.tz_localize(None)
+        latest_date = df.index[-1].strftime('%Y-%m-%d')
+        
+        if latest_date == today_str:
+            return True, latest_date
+        else:
+            return False, latest_date
+    except Exception as e:
+        return False, str(e)
+
 def main():
-    # 【テスト用】休日フィルターを無効化し、強制実行します
-    print("🔧 テストモード: 休日フィルターをスキップします")
+    today_str = datetime.now(JST).strftime('%Y-%m-%d')
+    
+    # 🛡️ 休日フィルター（安全装置）の実行
+    is_updated, latest_date = check_market_updated()
+    
+    if not is_updated:
+        subject = f"🚨【休場・未更新】株価データ処理スキップ [{today_str}]"
+        body = f"本日（{today_str}）の株価データが提供元に未反映、または休場日のため、\n"
+        body += f"分析と履歴の保存を安全に停止しました。\n\n"
+        body += f"最新取得日：{latest_date}\n\n"
+        body += "誤ったデータによる統計汚染を防ぐための正常な処理ストップです。\n"
+        body += "相場再開日のデータが揃い次第、自動的に正常稼働いたします。\n"
+        send_email(body, subject)
+        print(f"データ未更新のため終了します。最新データ日付: {latest_date}")
+        sys.exit(0)
 
     # 💡 5日後スイングシミュレーターの実行
     analyze()
