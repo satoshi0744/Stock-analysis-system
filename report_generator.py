@@ -52,7 +52,12 @@ def generate_files(watch_data, scan_data_dict):
         .badge {{ padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; display: inline-block; margin-bottom: 4px; }}
         .badge-up {{ background-color: #2e7d32; color: white; }}
         .badge-down {{ background-color: #c62828; color: white; }}
-        .badge-signal {{ background-color: #673ab7; color: white; border: 1px solid #9575cd; }}
+        .badge-signal {{ background-color: rgba(103,58,183,0.15); color: #d1c4e9; border: 1px solid #673ab7; }}
+        .badge-breakout {{ background-color: rgba(255,152,0,0.15); color: #ffe082; border: 1px solid #ff9800; font-size: 0.85rem; padding: 4px 10px; }}
+        .badge-alert {{ background-color: rgba(244,67,54,0.15); color: #ffcdd2; border: 1px solid #f44336; }}
+        .badge-reversal {{ background-color: rgba(3,169,244,0.15); color: #b3e5fc; border: 1px solid #03a9f4; }}
+        .badge-pullback {{ background-color: rgba(76,175,80,0.15); color: #c8e6c9; border: 1px solid #4caf50; }}
+        .badge-volume {{ background-color: rgba(255,255,255,0.1); color: #e0e0e0; border: 1px solid #757575; }}
         .rsi-high {{ color: #ff5252; font-weight: bold; }}
         .rsi-low {{ color: #69f0ae; font-weight: bold; }}
         .highlight {{ border-left: 4px solid #ffab00; background-color: #2a2a2a; }}
@@ -74,10 +79,15 @@ def generate_files(watch_data, scan_data_dict):
         .b-group-box {{ background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
         .b-group-item {{ border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px; }}
         .b-group-item:last-child {{ border-bottom: none; margin-bottom: 0; padding-bottom: 0; }}
+        .ai-comment-box {{ background: linear-gradient(145deg, #1e253c, #151a2a); border-left: 4px solid #b388ff; border-radius: 6px; padding: 12px 15px; margin-top: 15px; font-size: 0.9rem; color: #e8eaf6; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }}
+        .ai-comment-header {{ font-weight: bold; color: #b388ff; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }}
     </style>
 </head>
 <body>
-    <h1>📊 投資戦略ダッシュボード</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px;">
+        <h1 style="margin: 0; border: none; padding: 0;">📊 投資戦略ダッシュボード</h1>
+        <a href="analyzer.html" style="background-color: #1a237e; color: #4db8ff; text-decoration: none; padding: 8px 15px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; border: 1px solid #3949ab;">🔍 個別銘柄分析を開く</a>
+    </div>
     <div class="update-time">最終更新: {now_str}</div>
 
     <div style="background-color: #1e1e1e; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid {'#2e7d32' if market_info['is_good'] else '#c62828'};">
@@ -97,17 +107,41 @@ def generate_files(watch_data, scan_data_dict):
 
             html += f'<div class="card highlight"><div class="card-title">{item["code"]} {company_name}</div>'
             html += f'<div style="margin-bottom: 8px;">現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
+
+            # RSIと出来高の詳細テキストを表示
+            rsi = item.get("rsi", "-")
+            rsi_trend = item.get("rsi_trend", "")
+            vol_text = item.get("vol_text", "")
+            rsi_class = "rsi-high" if type(rsi) != str and rsi >= 70 else ("rsi-low" if type(rsi) != str and rsi <= 30 else "")
+            
+            html += f'<div style="margin-top:4px; margin-bottom:8px; display:flex; flex-wrap:wrap; gap:6px align-items:center;">'
+            html += f'<span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{rsi}</span> <span style="color:#aaa; font-size:0.8rem;">({rsi_trend})</span></span>'
+            html += f'<span style="font-size:0.9rem; margin-left:8px;">出来高: <span style="color:#aaa; font-size:0.8rem;">{vol_text}</span></span>'
+            html += f'</div>'
             
             if item.get("signals"):
-                html += '<div>'
+                html += '<div style="margin-top: 6px; margin-bottom: 6px; display:flex; flex-wrap:wrap; gap:4px;">'
                 for sig in item["signals"]:
-                    html += f'<span class="badge badge-signal">{sig}</span>'
+                    badge_cls = "badge-signal"
+                    if "[BREAKOUT]" in sig: badge_cls = "badge-breakout"
+                    elif "[ALERT]" in sig: badge_cls = "badge-alert"
+                    elif "[REVERSAL]" in sig: badge_cls = "badge-reversal"
+                    elif "[PULLBACK]" in sig: badge_cls = "badge-pullback"
+                    elif "出来高" in sig: badge_cls = "badge-volume"
+                    html += f'<span class="badge {badge_cls}">{sig}</span>'
                 html += '</div>'
             
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
+            ai_comment = item.get("ai_comment", "")
+            if ai_comment:
+                html += f'<div class="ai-comment-box"><div class="ai-comment-header"><span>🤖</span> AIテクニカル分析</div><div>{ai_comment}</div></div>'
+
             if "history_data" in item:
-                html += f'<div id="chart-scan-{item["code"]}" class="chart-container"></div>'
+                html += f'<div style="position:relative; margin-top:15px;" id="chart-wrapper-{item["code"]}">'
+                html += f'<div id="legend-{item["code"]}" style="position:absolute; top:8px; left:12px; z-index:10; font-size:0.85rem; padding:4px 8px; background:rgba(30,30,30,0.8); border-radius:4px; border:1px solid #444; color:#fff; display:flex; gap:12px;"></div>'
+                html += f'<div id="chart-scan-{item["code"]}" style="width:100%; height:250px; border:1px solid #333; border-radius:4px; overflow:hidden;"></div>'
+                html += f'</div>'
             html += '</div>'
 
     # 📝 2. B群（次点・監視用ログ）の折りたたみ表示
@@ -136,10 +170,49 @@ def generate_files(watch_data, scan_data_dict):
         <summary>📈 条件達成銘柄の検証データ（5営業日スイング）</summary>
         <div class="stats-grid">
             <div class="stat-item"><div class="stat-value">{summary["total_signals"]}</div><div class="stat-label">総シグナル数</div></div>
-            <div class="stat-item"><div class="stat-value">{summary["win_rate"]}%</div><div class="stat-label">勝率</div></div>
+            <div class="stat-item"><div class="stat-value">{summary["win_rate"]}%</div><div class="stat-label">全体勝率</div></div>
             <div class="stat-item"><div class="stat-value">{summary["avg_return"]}%</div><div class="stat-label">平均リターン</div></div>
-            <div class="stat-item"><div class="stat-value">{summary["expectancy"]}%</div><div class="stat-label">期待値</div></div>
+            <div class="stat-item"><div class="stat-value">{summary.get("expectancy", "-")}%</div><div class="stat-label">期待値</div></div>
         </div>
+    """
+    
+    strategies = summary.get("strategies", {})
+    if strategies:
+        html += """
+        <div style="margin-top: 15px; border-top: 1px solid #3949ab; padding-top: 15px;">
+            <div style="font-size: 0.85rem; font-weight: bold; color: #c5cae9; margin-bottom: 8px;">戦術別パフォーマンス</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; color: #e0e0e0;">
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #9fa8da;">
+                    <th style="padding: 6px 4px; text-align: left;">戦術</th>
+                    <th style="padding: 6px 4px; text-align: right;">回数</th>
+                    <th style="padding: 6px 4px; text-align: right;">勝率</th>
+                    <th style="padding: 6px 4px; text-align: right;">平均リターン</th>
+                </tr>
+"""
+        strategy_names = {
+            "BREAKOUT": "🚀 上昇加速型",
+            "PULLBACK": "🟢 押し目拾い型",
+            "REVERSAL": "🔄 底打ち確認型"
+        }
+        # 順番を固定したい場合はリストで順序付け
+        for st_name in ["BREAKOUT", "PULLBACK", "REVERSAL"]:
+            if st_name in strategies:
+                st = strategies[st_name]
+                display_name = strategy_names.get(st_name, st_name)
+                html += f"""
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 6px 4px; font-weight: bold;">{display_name}</td>
+                    <td style="padding: 6px 4px; text-align: right;">{st["total_signals"]}</td>
+                    <td style="padding: 6px 4px; text-align: right;">{st["win_rate"]}%</td>
+                    <td style="padding: 6px 4px; text-align: right;">{st["avg_return"]}%</td>
+                </tr>
+"""
+        html += """
+            </table>
+        </div>
+"""
+
+    html += """
         <div style="font-size: 0.8rem; color: #9fa8da; margin-top: 15px; background-color: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; line-height: 1.5;">
             ※シグナル発生日の翌日始値で買い、5営業日後の終値で売却したと仮定したシミュレーション結果です。
         </div>
@@ -162,18 +235,39 @@ def generate_files(watch_data, scan_data_dict):
 
             html += f'<div class="card-title">{item["code"]} {item["name"]}</div>'
             html += f'<div>現在値: <strong style="font-size:1.1rem;">{item["price"]:,}円</strong> {diff_html}</div>'
-            html += f'<div style="margin-top:8px; margin-bottom:4px;"><span class="badge {pos_class}">{item["position"]}</span><span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span></span></div>'
+            
+            # RSIと出来高の詳細テキストを表示
+            rsi_trend = item.get("rsi_trend", "")
+            vol_text = item.get("vol_text", "")
+            html += f'<div style="margin-top:8px; margin-bottom:4px; display:flex; flex-wrap:wrap; gap:6px align-items:center;">'
+            html += f'<span class="badge {pos_class}">{item["position"]}</span>'
+            html += f'<span style="font-size:0.9rem;">RSI: <span class="{rsi_class}">{item["rsi"]}</span> <span style="color:#aaa; font-size:0.8rem;">({rsi_trend})</span></span>'
+            html += f'<span style="font-size:0.9rem; margin-left:8px;">出来高: <span style="color:#aaa; font-size:0.8rem;">{vol_text}</span></span>'
+            html += f'</div>'
             
             if item.get("signals"):
-                html += '<div style="margin-top: 4px; margin-bottom: 4px;">'
+                html += '<div style="margin-top: 6px; margin-bottom: 6px; display:flex; flex-wrap:wrap; gap:4px;">'
                 for sig in item["signals"]:
-                    html += f'<span class="badge badge-signal">{sig}</span>'
+                    badge_cls = "badge-signal"
+                    if "[BREAKOUT]" in sig: badge_cls = "badge-breakout"
+                    elif "[ALERT]" in sig: badge_cls = "badge-alert"
+                    elif "[REVERSAL]" in sig: badge_cls = "badge-reversal"
+                    elif "[PULLBACK]" in sig: badge_cls = "badge-pullback"
+                    elif "出来高" in sig: badge_cls = "badge-volume"
+                    html += f'<span class="badge {badge_cls}">{sig}</span>'
                 html += '</div>'
             
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
+            ai_comment = item.get("ai_comment", "")
+            if ai_comment:
+                html += f'<div class="ai-comment-box"><div class="ai-comment-header"><span>🤖</span> AIテクニカル分析</div><div>{ai_comment}</div></div>'
+
             if "history_data" in item:
-                html += f'<div id="chart-watch-{item["code"]}" class="chart-container"></div>'
+                html += f'<div style="position:relative; margin-top:15px;" id="chart-wrapper-{item["code"]}">'
+                html += f'<div id="legend-{item["code"]}" style="position:absolute; top:8px; left:12px; z-index:10; font-size:0.85rem; padding:4px 8px; background:rgba(30,30,30,0.8); border-radius:4px; border:1px solid #444; color:#fff; display:flex; gap:12px;"></div>'
+                html += f'<div id="chart-watch-{item["code"]}" style="width:100%; height:250px; border:1px solid #333; border-radius:4px; overflow:hidden;"></div>'
+                html += f'</div>'
 
         html += '</div>'
 
@@ -209,33 +303,50 @@ def generate_files(watch_data, scan_data_dict):
                 }});
 
                 const candleSeries = chart.addCandlestickSeries({{
-                    upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
-                    wickUpColor: '#26a69a', wickDownColor: '#ef5350'
+                    upColor: '#FF5252', downColor: '#26a69a', borderVisible: false,
+                    wickUpColor: '#FF5252', wickDownColor: '#26a69a'
                 }});
 
                 const ma25Series = chart.addLineSeries({{
-                    color: '#2962FF', lineWidth: 1, title: 'MA25',
-                    lastValueVisible: false, priceLineVisible: false,
+                    color: '#2962FF', lineWidth: 1,
+                    lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
                 }});
 
                 const ma75Series = chart.addLineSeries({{
-                    color: '#FF5252', lineWidth: 1, title: 'MA75',
-                    lastValueVisible: false, priceLineVisible: false,
+                    color: '#FF5252', lineWidth: 1,
+                    lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
                 }});
 
                 const ma200Series = chart.addLineSeries({{
-                    color: '#FF9800', lineWidth: 2, title: 'MA200',
-                    lastValueVisible: false, priceLineVisible: false,
+                    color: '#FF9800', lineWidth: 2,
+                    lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
                 }});
 
                 const volumeSeries = chart.addHistogramSeries({{
-                    color: '#26a69a', priceFormat: {{ type: 'volume' }},
+                    color: '#26a69a', 
+                    lastValueVisible: false, priceLineVisible: false,
+                    priceFormat: {{ 
+                        type: 'custom',
+                        formatter: (price) => {{
+                            if (price >= 100000000) {{
+                                return (price / 100000000).toFixed(1) + '億';
+                            }}
+                            if (price >= 10000) {{
+                                return (price / 10000).toFixed(1) + '万';
+                            }}
+                            return price.toString();
+                        }}
+                    }},
                     priceScaleId: 'volume_scale',
                 }});
 
                 chart.priceScale('volume_scale').applyOptions({{
                     scaleMargins: {{ top: 0.8, bottom: 0 }},
                 }});
+
+                let lastMa25 = null;
+                let lastMa75 = null;
+                let lastMa200 = null;
 
                 const candleData = [];
                 const volumeData = [];
@@ -249,17 +360,20 @@ def generate_files(watch_data, scan_data_dict):
                         candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
                         volumeData.push({{
                             time: d.time, value: d.volume || 0,
-                            color: d.close >= d.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+                            color: d.close >= d.open ? 'rgba(255, 82, 82, 0.5)' : 'rgba(38, 166, 154, 0.5)'
                         }});
 
                         if (d.ma25 !== undefined && d.ma25 !== null) {{
                             ma25Data.push({{ time: d.time, value: d.ma25 }});
+                            lastMa25 = d.ma25.toFixed(1);
                         }}
                         if (d.ma75 !== undefined && d.ma75 !== null) {{
                             ma75Data.push({{ time: d.time, value: d.ma75 }});
+                            lastMa75 = d.ma75.toFixed(1);
                         }}
                         if (d.ma200 !== undefined && d.ma200 !== null) {{
                             ma200Data.push({{ time: d.time, value: d.ma200 }});
+                            lastMa200 = d.ma200.toFixed(1);
                         }}
                         lastTime = d.time;
                     }}
@@ -272,6 +386,16 @@ def generate_files(watch_data, scan_data_dict):
                 ma200Series.setData(ma200Data);
                 
                 chart.timeScale().fitContent();
+
+                // 凡例を左上に固定表示
+                const legend = document.getElementById('legend-' + item.code);
+                if(legend) {{
+                    legend.innerHTML = `
+                        <div><span style="color:#2962FF; font-weight:bold;">■</span> MA25: ${{lastMa25}}</div>
+                        <div><span style="color:#FF5252; font-weight:bold;">■</span> MA75: ${{lastMa75}}</div>
+                        <div><span style="color:#FF9800; font-weight:bold;">■</span> MA200: ${{lastMa200}}</div>
+                    `;
+                }}
             }}
         }}
 

@@ -1,6 +1,23 @@
 {
-  "total_signals": 180,
-  "win_rate": 51.67,
-  "avg_return": 0.69,
-  "expectancy": 0.69
+  "total_signals": 5832,
+  "win_rate": 51.99,
+  "avg_return": 0.31,
+  "expectancy": 0.31,
+  "strategies": {
+    "BREAKOUT": {
+      "total_signals": 146,
+      "win_rate": 51.37,
+      "avg_return": 0.71
+    },
+    "PULLBACK": {
+      "total_signals": 5236,
+      "win_rate": 52.12,
+      "avg_return": 0.32
+    },
+    "REVERSAL": {
+      "total_signals": 450,
+      "win_rate": 50.67,
+      "avg_return": 0.1
+    }
+  }
 }

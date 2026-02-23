@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>個別銘柄分析＆監視登録</title>
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        margin: 0;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0;
+        color: #fff;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+      }
+      .control-panel {
+        background-color: #1a1a1a;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #333;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-items: center;
+      }
+      .input-group {
+        display: flex;
+        align-items: center;
+      }
+      input[type="text"] {
+        background-color: #2a2a2a;
+        border: 1px solid #444;
+        color: #fff;
+        padding: 10px 15px;
+        border-radius: 4px;
+        font-size: 1rem;
+        outline: none;
+        width: 150px;
+      }
+      input[type="text"]:focus {
+        border-color: #4db8ff;
+      }
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .btn-primary {
+        background-color: transparent;
+        color: #4db8ff;
+        border: 1px solid #4db8ff;
+        margin-left: 10px;
+      }
+      .btn-primary:hover {
+        background-color: rgba(77, 184, 255, 0.15);
+      }
+      .btn-action {
+        background-color: transparent;
+        color: #ffb74d;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 0.95rem;
+        margin-left: auto;
+        border: 1px solid #ffb74d;
+        transition: all 0.2s;
+      }
+      .btn-action:hover {
+        background-color: rgba(255, 183, 77, 0.15);
+      }
+      .nav-link {
+        color: #888;
+        text-decoration: none;
+        padding: 5px 10px;
+        font-size: 0.9rem;
+        transition: color 0.2s;
+      }
+      .nav-link:hover {
+        color: #fff;
+      }
+      #tv-widget-container {
+        height: 600px;
+        width: 100%;
+        border-radius: 8px;
+        overflow: hidden;
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+      }
+      .instruction {
+        font-size: 0.9rem;
+        color: #aaa;
+        margin-top: 10px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🔍 個別銘柄分析＆監視登録</h1>
+      <a href="index.html" class="nav-link">← ダッシュボードに戻る</a>
+    </div>
+
+    <div class="control-panel">
+      <div class="input-group">
+        <input
+          type="text"
+          id="ticker-input"
+          placeholder="銘柄コード (例: 7203)"
+          onkeypress="handleKeyPress(event)"
+        />
+        <button class="btn btn-primary" onclick="loadChart()">
+          チャートを表示
+        </button>
+      </div>
+      <a
+        href="https://github.com/satoshi0744/Stock-analysis-system/edit/main/watcher.py"
+        target="_blank"
+        class="btn-action"
+      >
+        ⭐ 監視リストに登録する
+      </a>
+      <div class="instruction">
+        ※分析したい銘柄の4桁コードを入力してください。日足チャートと主要インジケーターが表示されます。監視リストに追加する場合は、右側のボタンからGitHub上で直接
+        <code>watcher.py</code> に追記できます。
+      </div>
+    </div>
+
+    <div id="tv-widget-container">
+      <div
+        style="
+          padding: 20px;
+          color: #888;
+          text-align: center;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        "
+      >
+        銘柄コードを入力して「チャートを表示」をクリックしてください。
+      </div>
+    </div>
+
+    <script
+      type="text/javascript"
+      src="https://s3.tradingview.com/tv.js"
+    ></script>
+    <script>
+      function handleKeyPress(e) {
+        if (e.key === "Enter") {
+          loadChart();
+        }
+      }
+
+      function loadChart() {
+        const input = document.getElementById("ticker-input").value.trim();
+        if (!input) return;
+
+        // 入力されたコードが数字のみの場合、TSE(東京証券取引所)プレフィックスを付ける
+        const symbol = /^\d+$/.test(input) ? `TSE:${input}` : input;
+
+        document.getElementById("tv-widget-container").innerHTML = "";
+
+        new TradingView.widget({
+          autosize: true,
+          symbol: symbol,
+          interval: "D",
+          timezone: "Asia/Tokyo",
+          theme: "dark",
+          style: "1",
+          locale: "ja",
+          enable_publishing: false,
+          backgroundColor: "#1e1e1e",
+          gridColor: "#2b2b43",
+          hide_top_toolbar: false,
+          hide_legend: false,
+          save_image: false,
+          container_id: "tv-widget-container",
+          studies: [
+            "Volume@tv-basicstudies",
+            "MASimple@tv-basicstudies",
+            "MASimple@tv-basicstudies",
+            "RSI@tv-basicstudies",
+          ],
+        });
+      }
+    </script>
+  </body>
+</html>

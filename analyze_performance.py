@@ -4,17 +4,114 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from scanner import SCAN_UNIVERSE
+import concurrent.futures
+import time
 
 JST = timezone(timedelta(hours=9))
 
+def process_backtest_ticker(code, nk_data, start_str, end_str):
+    max_retries = 3
+    base_wait = 2
+
+    stats = {
+        "BREAKOUT": {"trades": 0, "wins": 0, "return_pct": 0.0},
+        "PULLBACK": {"trades": 0, "wins": 0, "return_pct": 0.0},
+        "REVERSAL": {"trades": 0, "wins": 0, "return_pct": 0.0}
+    }
+
+    for attempt in range(max_retries):
+        try:
+            df = yf.Ticker(f"{code}.T").history(start=start_str, end=end_str)
+            if df.empty or len(df) < 250:
+                return stats
+
+            df.index = df.index.tz_localize(None)
+            
+            df['MA5'] = df['Close'].rolling(window=5).mean()
+            df['MA75'] = df['Close'].rolling(window=75).mean()
+            df['MA200'] = df['Close'].rolling(window=200).mean()
+            df['Vol_Avg20'] = df['Volume'].rolling(window=20).mean().shift(1)
+            df['Vol_Ratio'] = df['Volume'] / df['Vol_Avg20']
+            df['Prev_High'] = df['High'].shift(1)
+            
+            df['High_20'] = df['High'].rolling(window=20).max().shift(1)
+            df['Low_20'] = df['Low'].rolling(window=20).min().shift(1)
+            
+            delta = df['Close'].diff()
+            gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
+            loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
+            rs = gain / loss
+            df['RSI'] = 100 - (100 / (1 + rs))
+            
+            df = df.join(nk_data[['Is_Good_Market']], how='left')
+            df['Is_Good_Market'] = df['Is_Good_Market'].ffill()
+
+            is_yosen = df['Close'] > df['Open']
+            
+            m_breakout = (
+                (df['Is_Good_Market'] == True) & 
+                (df['Vol_Ratio'] >= 2.5) & 
+                (df['Close'] > df['Prev_High']) & 
+                (df['Close'] > df['MA200']) &
+                (df['Close'] > df['High_20'])
+            )
+            
+            m_reversal = (
+                (df['Low'] <= df['Low_20'] * 1.05) & 
+                (df['Low'] >= df['Low_20']) & 
+                is_yosen & 
+                (df['RSI'] <= 40) &
+                (df['Close'] > df['MA5'])
+            )
+            
+            ma75_supp = (df['Low'] <= df['MA75'] * 1.03) & (df['Close'] > df['MA75'])
+            ma200_supp = (df['Low'] <= df['MA200'] * 1.03) & (df['Close'] > df['MA200'])
+            m_pullback = (ma75_supp | ma200_supp) & is_yosen & (~m_reversal)
+
+            signal_indices = df[m_breakout | m_pullback | m_reversal].index
+
+            for signal_date in signal_indices:
+                idx = df.index.get_loc(signal_date)
+                
+                if idx + 5 < len(df):
+                    buy_price = df.iloc[idx + 1]['Open']
+                    sell_price = df.iloc[idx + 5]['Close']
+                    
+                    if pd.isna(buy_price) or pd.isna(sell_price) or buy_price == 0:
+                        continue
+
+                    trade_return = (sell_price - buy_price) / buy_price * 100
+                    is_win = 1 if trade_return > 0 else 0
+                    
+                    if m_breakout.loc[signal_date]:
+                        stats["BREAKOUT"]["trades"] += 1
+                        stats["BREAKOUT"]["wins"] += is_win
+                        stats["BREAKOUT"]["return_pct"] += trade_return
+                        
+                    if m_pullback.loc[signal_date]:
+                        stats["PULLBACK"]["trades"] += 1
+                        stats["PULLBACK"]["wins"] += is_win
+                        stats["PULLBACK"]["return_pct"] += trade_return
+                        
+                    if m_reversal.loc[signal_date]:
+                        stats["REVERSAL"]["trades"] += 1
+                        stats["REVERSAL"]["wins"] += is_win
+                        stats["REVERSAL"]["return_pct"] += trade_return
+
+            return stats
+
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(base_wait * (2 ** attempt))
+            else:
+                return stats
+
 def analyze():
-    # 過去約2年分（約500営業日）のデータを取得してテストする
     end_date = datetime.now(JST)
     start_date = end_date - timedelta(days=700)
     start_str = start_date.strftime('%Y-%m-%d')
     end_str = (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
 
-    # まず日経平均（地合い）のデータを取得
     try:
         nk = yf.Ticker("^N225").history(start=start_str, end=end_str)
         nk.index = nk.index.tz_localize(None)
@@ -24,74 +121,61 @@ def analyze():
         print(f"日経平均データの取得に失敗: {e}")
         return
 
-    total_trades = 0
-    winning_trades = 0
-    total_return_pct = 0.0
+    agg_stats = {
+        "BREAKOUT": {"trades": 0, "wins": 0, "return_pct": 0.0},
+        "PULLBACK": {"trades": 0, "wins": 0, "return_pct": 0.0},
+        "REVERSAL": {"trades": 0, "wins": 0, "return_pct": 0.0}
+    }
 
-    print("🔍 スイングトレード（5日後決済）のバックテストを開始します...")
+    print("🔍 スイングトレード（5日後決済）の戦術別バックテストを開始します...")
 
-    for code in SCAN_UNIVERSE.keys():
-        try:
-            df = yf.Ticker(f"{code}.T").history(start=start_str, end=end_str)
-            if df.empty or len(df) < 250:
-                continue
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(process_backtest_ticker, code, nk, start_str, end_str): code for code in SCAN_UNIVERSE.keys()}
+        
+        for future in concurrent.futures.as_completed(futures):
+            res = future.result()
+            for strategy in agg_stats.keys():
+                agg_stats[strategy]["trades"] += res[strategy]["trades"]
+                agg_stats[strategy]["wins"] += res[strategy]["wins"]
+                agg_stats[strategy]["return_pct"] += res[strategy]["return_pct"]
 
-            df.index = df.index.tz_localize(None)
-            df['MA200'] = df['Close'].rolling(window=200).mean()
-            df['Vol_Avg20'] = df['Volume'].rolling(window=20).mean().shift(1)
-            df['Vol_Ratio'] = df['Volume'] / df['Vol_Avg20']
-            df['Prev_High'] = df['High'].shift(1)
-            
-            # 日経平均の地合いデータを結合
-            df = df.join(nk[['Is_Good_Market']], how='left')
-            df['Is_Good_Market'] = df['Is_Good_Market'].ffill()
-
-            # A群の条件判定（シグナル発生日を探す）
-            # 条件: 出来高2.5倍以上 ＆ 終値が前日高値超え(陽線) ＆ 200日線上 ＆ 地合い良好
-            signals = df[
-                (df['Vol_Ratio'] >= 2.5) & 
-                (df['Close'] > df['Prev_High']) & 
-                (df['Close'] > df['MA200']) & 
-                (df['Is_Good_Market'] == True)
-            ]
-
-            # 各シグナルについて、仮想トレードを実行
-            for signal_date, signal_row in signals.iterrows():
-                # シグナル発生日のインデックス番号を取得
-                idx = df.index.get_loc(signal_date)
-                
-                # 翌日(idx+1)に買い、5日後(idx+5)に売る
-                # データが最後まで（5日後まで）存在するかチェック
-                if idx + 5 < len(df):
-                    buy_price = df.iloc[idx + 1]['Open']
-                    sell_price = df.iloc[idx + 5]['Close']
-                    
-                    if pd.isna(buy_price) or pd.isna(sell_price) or buy_price == 0:
-                        continue
-
-                    trade_return = (sell_price - buy_price) / buy_price * 100
-                    
-                    total_trades += 1
-                    total_return_pct += trade_return
-                    if trade_return > 0:
-                        winning_trades += 1
-
-        except Exception as e:
-            continue
-
-    # 結果の集計
-    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
-    avg_return = (total_return_pct / total_trades) if total_trades > 0 else 0.0
-    expectancy = avg_return # 単純な期待値（1トレードあたりの平均リターン）
+    total_trades = sum(agg_stats[s]["trades"] for s in agg_stats)
+    total_wins = sum(agg_stats[s]["wins"] for s in agg_stats)
+    total_return = sum(agg_stats[s]["return_pct"] for s in agg_stats)
+    
+    overall_win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0.0
+    overall_avg_return = (total_return / total_trades) if total_trades > 0 else 0.0
 
     summary = {
         "total_signals": total_trades,
-        "win_rate": round(win_rate, 2),
-        "avg_return": round(avg_return, 2),
-        "expectancy": round(expectancy, 2)
+        "win_rate": round(overall_win_rate, 2),
+        "avg_return": round(overall_avg_return, 2),
+        "expectancy": round(overall_avg_return, 2),
+        "strategies": {}
     }
 
-    print(f"✅ バックテスト完了: トレード回数 {total_trades}回 / 勝率 {round(win_rate, 2)}%")
+    strategy_names = {
+        "BREAKOUT": "🚀 上昇加速型",
+        "PULLBACK": "🟢 押し目拾い型",
+        "REVERSAL": "🔄 底打ち確認型"
+    }
+
+    for strategy, data in agg_stats.items():
+        st_trades = data["trades"]
+        st_win_rate = (data["wins"] / st_trades * 100) if st_trades > 0 else 0.0
+        st_avg_return = (data["return_pct"] / st_trades) if st_trades > 0 else 0.0
+        
+        # 💡 ここを元に戻しました（データ保存は英語のまま、画面表示だけ日本語）
+        summary["strategies"][strategy] = {
+            "total_signals": st_trades,
+            "win_rate": round(st_win_rate, 2),
+            "avg_return": round(st_avg_return, 2)
+        }
+        
+        display_name = strategy_names[strategy]
+        print(f"[{display_name}] 回数: {st_trades} | 勝率: {round(st_win_rate, 1)}% | 平均リターン: {round(st_avg_return, 2)}%")
+
+    print(f"✅ 全テスト完了: 合計トレード {total_trades}回 / 全体勝率 {round(overall_win_rate, 2)}%")
 
     os.makedirs("public", exist_ok=True)
     with open("public/performance_summary.json", "w", encoding="utf-8") as f:
