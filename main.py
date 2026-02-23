@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from scanner import scan_b_type
 from watcher import analyze_watch_tickers
-from report_generator import generate_html_report
+from report_generator import generate_files
 
 # 日本時間のタイムゾーン設定
 JST = timezone(timedelta(hours=9))
@@ -24,7 +24,10 @@ def main():
     print("\n📊 ダッシュボードの生成を開始...")
     # publicフォルダが存在しない場合は作成
     os.makedirs("public", exist_ok=True)
-    generate_html_report(scan_results, watch_results)
+    
+    # 💡修正箇所：正しい関数名（generate_files）と引数の順番で呼び出し
+    generate_files(watch_results, scan_results)
+    
     print("✅ ダッシュボード生成完了: public/index.html")
     
     print("\n🎉 [SUCCESS] すべての処理が正常に完了しました！")
