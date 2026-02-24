@@ -1,39 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投資戦略ダッシュボード</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 15px; line-height: 1.6; }
+        h1 { font-size: 1.4rem; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        h2 { font-size: 1.1rem; margin-top: 25px; color: #4db8ff; border-left: 4px solid #4db8ff; padding-left: 8px; }
+        .card { background-color: #1e1e1e; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .card-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 8px; color: #fff; }
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-right: 5px; display: inline-block; margin-bottom: 4px; }
+        .badge-up { background-color: #2e7d32; color: white; }
+        .badge-down { background-color: #c62828; color: white; }
+        .badge-signal { background-color: rgba(103,58,183,0.15); color: #d1c4e9; border: 1px solid #673ab7; }
+        .rsi-high { color: #ff5252; font-weight: bold; }
+        .rsi-low { color: #69f0ae; font-weight: bold; }
+        .ai-comment-box { background: linear-gradient(145deg, #1e253c, #151a2a); border-left: 4px solid #b388ff; border-radius: 6px; padding: 12px 15px; margin-top: 15px; font-size: 0.9rem; color: #e8eaf6; }
+        .diff-up { color: #69f0ae; font-weight: bold; }
+        .diff-down { color: #ff5252; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px;">
+        <h1 style="margin: 0;">📊 投資戦略ダッシュボード</h1>
+        <a href="analyzer.html" target="_blank" style="background-color: #1a237e; color: #4db8ff; text-decoration: none; padding: 8px 15px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; border: 1px solid #3949ab;">🔍 個別銘柄分析を開く</a>
+    </div>
 
-    <!DOCTYPE html>
-    <html lang="ja">
-    <head>
-        <meta charset="UTF-8">
-        <title>投資戦略ダッシュボード</title>
-        <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-        <style>
-            /* 既存のスタイルを維持 */
-            body { background-color: #121212; color: #e0e0e0; font-family: sans-serif; padding: 20px; }
-            .card { background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #333; }
-            .good { border-left-color: #2e7d32; }
-            .adjust { border-left-color: #fbc02d; }
-        </style>
-    </head>
-    <body>
-        <h1>📊 投資戦略ダッシュボード</h1>
-        <div class="card good">
-            <h3>本日の相場環境: 🟩 良好 (200日・25日線上 / 短期リバ期待)</h3>
-            <div id="tv_chart" style="height:400px;"></div>
+    <div style="background-color: #1e1e1e; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2e7d32;">
+        <span style="font-size: 0.9rem; color: #aaa;">本日の相場環境：</span> 
+        <strong style="font-size: 1.1rem; color: #fff;">🟩 良好 (200日・25日線上 / 短期リバ期待)</strong>
+        <div id="tv-nikkei-container" style="width: 100%; height: 400px; margin-top: 15px;"></div>
+    </div>
+
+    <h2>📋 監視銘柄の状況</h2>
+
+        <div class="card">
+            <div class="card-title">7203 トヨタ自動車</div>
+            <div>現在値: <strong>3,656円</strong> <span class="diff-up">(+21円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">52.6</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。ただし短期MAが下向きで、日柄調整の段階にあります。</div>
         </div>
-        
-        <h2>📋 監視銘柄の状況 (Watchlist順)</h2>
-        <div class="card"><strong>7203 トヨタ自動車</strong>: 3,656円 (RSI: 52.6)</div><div class="card"><strong>6758 ソニーグループ</strong>: 3,306円 (RSI: 33.9)</div><div class="card"><strong>8411 みずほFg</strong>: 6,930円 (RSI: 49.4)</div><div class="card"><strong>8306 三菱UFJ Fg</strong>: 2,888円 (RSI: 51.3)</div><div class="card"><strong>9984 ソフトバンクG</strong>: 4,096円 (RSI: 45.2)</div><div class="card"><strong>6861 キーエンス</strong>: 63,740円 (RSI: 69.5)</div><div class="card"><strong>8035 東京エレクトロン</strong>: 44,380円 (RSI: 63.7)</div><div class="card"><strong>9432 NTT</strong>: 150円 (RSI: 36.4)</div><div class="card"><strong>8058 三菱商事</strong>: 5,132円 (RSI: 75.4)</div><div class="card"><strong>7974 任天堂</strong>: 8,541円 (RSI: 34.3)</div><div class="card"><strong>6146 ディスコ</strong>: 75,620円 (RSI: 66.8)</div><div class="card"><strong>4063 信越化学工業</strong>: 5,930円 (RSI: 64.6)</div>
-
-        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-        <script type="text/javascript">
-            new TradingView.widget({
-                "container_id": "tv_chart",
-                "width": "100%", "height": 400,
-                "symbol": "OANDA:JP225JPY",
-                "interval": "D", "timezone": "Asia/Tokyo",
-                "theme": "dark", "style": "1", "locale": "ja",
-                "enable_publishing": false, "hide_side_toolbar": false, "allow_symbol_change": true
-            });
-        </script>
-    </body>
-    </html>
-    
+        <div class="card">
+            <div class="card-title">6758 ソニーグループ</div>
+            <div>現在値: <strong>3,306円</strong> <span class="diff-down">(-30円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-down">200日線下</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">33.9</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【下落トレンド中】200日線の下で上値の重い展開です。底打ちの明確なサイン（MA5上抜け等）が出るまで様子見が賢明です。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">8411 みずほFg</div>
+            <div>現在値: <strong>6,930円</strong> <span class="diff-down">(-245円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">49.4</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">8306 三菱UFJ Fg</div>
+            <div>現在値: <strong>2,888円</strong> <span class="diff-down">(-54円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">51.3</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。ただし短期MAが下向きで、日柄調整の段階にあります。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">9984 ソフトバンクG</div>
+            <div>現在値: <strong>4,096円</strong> <span class="diff-down">(-233円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">45.2</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">6861 キーエンス</div>
+            <div>現在値: <strong>63,740円</strong> <span class="diff-up">(+2,310円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">69.5</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">8035 東京エレクトロン</div>
+            <div>現在値: <strong>44,380円</strong> <span class="diff-up">(+420円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">63.7</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">9432 NTT</div>
+            <div>現在値: <strong>150円</strong> <span>(±0円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-down">200日線下</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">36.4</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【下落トレンド中】200日線の下で上値の重い展開です。底打ちの明確なサイン（MA5上抜け等）が出るまで様子見が賢明です。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">8058 三菱商事</div>
+            <div>現在値: <strong>5,132円</strong> <span class="diff-up">(+141円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="rsi-high">75.4</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。 ただしRSI=75.4と短期的な過熱サインが点灯中。高値掴みには注意してください。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">7974 任天堂</div>
+            <div>現在値: <strong>8,541円</strong> <span class="diff-down">(-46円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-down">200日線下</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">34.3</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【下落トレンド中】200日線の下で上値の重い展開です。底打ちの明確なサイン（MA5上抜け等）が出るまで様子見が賢明です。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">6146 ディスコ</div>
+            <div>現在値: <strong>75,620円</strong> <span class="diff-up">(+1,560円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">66.8</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。</div>
+        </div>
+        <div class="card">
+            <div class="card-title">4063 信越化学工業</div>
+            <div>現在値: <strong>5,930円</strong> <span class="diff-up">(+180円)</span></div>
+            <div style="margin-top:8px;">
+                <span class="badge badge-up">200日線上</span>
+                <span style="font-size:0.9rem;">RSI: <span class="">64.6</span></span>
+            </div>
+            <div class="ai-comment-box">🤖 【順張り継続】200日線上で推移しており、基本的には上目線です。MA25も上向きで強い買い意欲を感じます。</div>
+        </div>
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script type="text/javascript">
+        new TradingView.widget({
+            "width": "100%", "height": 400, "symbol": "NI225",
+            "interval": "D", "timezone": "Asia/Tokyo", "theme": "dark",
+            "container_id": "tv-nikkei-container", "locale": "ja"
+        });
+    </script>
+</body></html>
