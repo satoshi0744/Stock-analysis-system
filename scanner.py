@@ -26,21 +26,21 @@ def check_market_trend(start_str, end_str):
         latest = df.iloc[-1]
         prev = df.iloc[-2]
         
+        # すべてのMAを上回り、かつ本日が続落でない場合のみ「良好」
         is_above_ma200 = bool(latest['Close'] > latest['MA200'])
         is_above_ma25 = bool(latest['Close'] > latest['MA25'])
         is_above_ma5 = bool(latest['Close'] > latest['MA5'])
-        is_falling = bool(latest['Close'] < prev['Close']) # 前日比判定
+        is_not_falling = bool(latest['Close'] >= prev['Close'])
         
-        # 厳格な地合い判定：200日・25日線上でも、5日線の下または続落なら「調整」
-        if is_above_ma200 and is_above_ma25 and is_above_ma5 and not is_falling:
+        if is_above_ma200 and is_above_ma25 and is_above_ma5 and is_not_falling:
             is_good = True
-            text = "🟩 良好 (200日・25日・5日線上)"
-        elif is_above_ma200 and (not is_above_ma25 or not is_above_ma5 or is_falling):
+            text = "🟩 良好 (短期・中期・長期すべて上向き)"
+        elif is_above_ma200 and (not is_above_ma25 or is_not_falling == False):
             is_good = False
-            text = "🟨 調整局面 (続落・短期トレンド下落中)"
+            text = "🟨 調整局面 (続落・短期トレンド崩れ)"
         else:
             is_good = False
-            text = "⚠️ 警戒 (200日線下)"
+            text = "⚠️ 警戒 (長期トレンド下落中)"
         return is_good, text
     except:
         return False, "データ取得エラー"
@@ -61,13 +61,11 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
         latest = df.iloc[-1]
         prev = df.iloc[-2]
         
-        # RSI計算
         delta = df['Close'].diff()
         gain = delta.where(delta > 0, 0).ewm(alpha=1/14, adjust=False).mean()
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
         rsi = round(100 - (100 / (1 + (gain / loss))), 1) if not loss.iloc[-1] == 0 else 100
 
-        # 戦略判定
         group = "B"
         signals = []
         vol_avg20 = df['Volume'].rolling(window=20).mean().iloc[-2]
@@ -75,13 +73,11 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
         
         if is_good_market and latest['Close'] > latest['High_20'] and vol_ratio >= 1.5:
             group = "A"
-            signals.append(f"🚀 上昇加速型 ({vol_ratio}倍)")
+            signals.append(f"🚀 上昇加速型")
         
         if rsi <= 30 and latest['Close'] < latest['MA25'] * 0.95 and latest['Close'] > latest['Open']:
             group = "A"
             signals.append("🔄 底打ち確認型")
-
-        if vol_ratio >= 2.0: signals.append(f"🔥 出来高急増({vol_ratio}倍)")
 
         history = [{"time": i.strftime('%Y-%m-%d'), "open": r['Open'], "high": r['High'], "low": r['Low'], "close": r['Close'], "volume": r['Volume'], "ma25": r['MA25'], "ma75": r['MA75'], "ma200": r['MA200']} for i, r in df.tail(120).iterrows()]
 
@@ -90,7 +86,7 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
             "data": {
                 "code": code, "name": name, "price": int(latest['Close']), "price_diff": int(latest['Close'] - prev['Close']),
                 "rsi": rsi, "signals": signals, "history_data": history, "position": "200日線上" if latest['Close'] > latest['MA200'] else "200日線下",
-                "vol_text": f"{latest['Volume']/10000:.1f}万株", "ai_comment": f"RSI {rsi}で推移。移動平均線との位置関係を注視。"
+                "vol_text": f"{latest['Volume']/10000:.1f}万株", "ai_comment": f"RSI {rsi}。{'上昇トレンド維持' if latest['Close'] > latest['MA25'] else '調整局面。底打ちを待つ状態'}。"
             }
         }
     except: return None
