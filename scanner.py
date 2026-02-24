@@ -51,10 +51,23 @@ def check_market_trend(start_str, end_str):
         df = ticker.history(start=start_str, end=end_str)
         if df.empty or len(df) < 200:
             return False, "判定不能"
+        df['MA25'] = df['Close'].rolling(window=25).mean()
         df['MA200'] = df['Close'].rolling(window=200).mean()
         latest = df.iloc[-1]
-        is_good = bool(latest['Close'] > latest['MA200'])
-        text = "🟩 良好 (日経平均 200日線上)" if is_good else "⚠️ 警戒 (日経平均 200日線下)"
+        
+        is_above_ma200 = bool(latest['Close'] > latest['MA200'])
+        is_above_ma25 = bool(latest['Close'] > latest['MA25'])
+        
+        if is_above_ma200 and is_above_ma25:
+            is_good = True
+            text = "🟩 良好 (200日・25日線上)"
+        elif is_above_ma200 and not is_above_ma25:
+            is_good = False
+            text = "🟨 調整局面 (200日線上・25日線下)"
+        else:
+            is_good = False
+            text = "⚠️ 警戒 (200日線下)"
+            
         return is_good, text
     except:
         return False, "データ取得エラー"

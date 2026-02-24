@@ -86,13 +86,37 @@ def generate_files(watch_data, scan_data_dict):
 <body>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px;">
         <h1 style="margin: 0; border: none; padding: 0;">📊 投資戦略ダッシュボード</h1>
-        <a href="analyzer.html" style="background-color: #1a237e; color: #4db8ff; text-decoration: none; padding: 8px 15px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; border: 1px solid #3949ab;">🔍 個別銘柄分析を開く</a>
+        <a href="analyzer.html" target="_blank" style="background-color: #1a237e; color: #4db8ff; text-decoration: none; padding: 8px 15px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; border: 1px solid #3949ab;">🔍 個別銘柄分析を開く</a>
     </div>
     <div class="update-time">最終更新: {now_str}</div>
 
-    <div style="background-color: #1e1e1e; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid {'#2e7d32' if market_info['is_good'] else '#c62828'};">
+    <div style="background-color: #1e1e1e; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid {'#2e7d32' if market_info['is_good'] else ('#fbc02d' if '調整局面' in market_info['text'] else '#c62828')};">
         <span style="font-size: 0.9rem; color: #aaa;">本日の相場環境：</span> 
         <strong style="font-size: 1.1rem; color: #fff;">{market_info['text']}</strong>
+        <div id="tv-nikkei-container" style="width: 100%; height: 350px; margin-top: 15px; border-radius: 4px; overflow: hidden; border: 1px solid #333;"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+        <script type="text/javascript">
+          new TradingView.widget({{
+            "autosize": true,
+            "symbol": "TVC:NI225",
+            "interval": "D",
+            "timezone": "Asia/Tokyo",
+            "theme": "dark",
+            "style": "1",
+            "locale": "ja",
+            "enable_publishing": false,
+            "backgroundColor": "#1e1e1e",
+            "gridColor": "#2b2b43",
+            "hide_top_toolbar": false,
+            "hide_legend": false,
+            "save_image": false,
+            "container_id": "tv-nikkei-container",
+            "studies": [
+              "MASimple@tv-basicstudies",
+              "MASimple@tv-basicstudies"
+            ]
+          }});
+        </script>
     </div>
 
     <h2 style="color: #ffab00; border-left: 4px solid #ffab00; margin-top: 5px;">👑 本日の条件達成銘柄</h2>
