@@ -74,8 +74,8 @@
         background-color: rgba(77, 184, 255, 0.15);
       }
       .btn-action {
-        background-color: transparent;
-        color: #ffb74d;
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #e0e0e0;
         text-decoration: none;
         display: inline-flex;
         align-items: center;
@@ -84,11 +84,13 @@
         font-weight: bold;
         font-size: 0.95rem;
         margin-left: auto;
-        border: 1px solid #ffb74d;
+        border: 1px solid #666;
         transition: all 0.2s;
       }
       .btn-action:hover {
-        background-color: rgba(255, 183, 77, 0.15);
+        background-color: rgba(255, 255, 255, 0.1);
+        border-color: #888;
+        color: #ffffff;
       }
       .nav-link {
         color: #888;
@@ -135,15 +137,15 @@
         </button>
       </div>
       <a
-        href="https://github.com/satoshi0744/Stock-analysis-system/edit/main/watcher.py"
+        href="https://github.com/satoshi0744/Stock-analysis-system/edit/main/watchlist.json"
         target="_blank"
         class="btn-action"
       >
-        ⭐ 監視リストに登録する
+        ⚙️ 監視リスト登録用jsonを開く
       </a>
       <div class="instruction">
-        ※分析したい銘柄の4桁コードを入力してください。日足チャートと主要インジケーターが表示されます。監視リストに追加する場合は、右側のボタンからGitHub上で直接
-        <code>watcher.py</code> に追記できます。
+        ※分析したい銘柄の4桁コードを入力してください。日足チャートと主要インジケーターが表示されます。<br>
+        ※新たに監視リストへ追加・削除する場合は、右側のボタンからGitHub上で直接 <code>watchlist.json</code> を編集してください。
       </div>
     </div>
 
