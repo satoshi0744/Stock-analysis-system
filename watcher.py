@@ -114,9 +114,14 @@ def process_watch_ticker(code, name, start_str, end_str):
                 if latest['High'] >= latest['High_20'] * 0.97 and is_insen and prev_rsi >= 65 and rsi < prev_rsi:
                     signals.append("⚠️ [天井警戒型] ダブルトップ警戒")
 
-            # 💡 2. 🔄 底打ち確認型
-            if pd.notna(latest['Low_20']) and pd.notna(latest['MA5']):
-                if latest['Low'] <= latest['Low_20'] * 1.05 and latest['Low'] >= latest['Low_20'] and is_yosen and rsi <= 40 and latest['Close'] > latest['MA5']:
+            # 💡 2. 🔄 底打ち確認型（超・厳格化：RSI30以下 ＆ MA25下方乖離）
+            if pd.notna(latest['Low_20']) and pd.notna(latest['MA5']) and pd.notna(latest['MA25']):
+                if (latest['Low'] <= latest['Low_20'] * 1.05 and 
+                    latest['Low'] >= latest['Low_20'] and 
+                    is_yosen and 
+                    rsi <= 30 and 
+                    latest['Close'] < latest['MA25'] * 0.95 and 
+                    latest['Close'] > latest['MA5']):
                     signals.append("🔄 [底打ち確認型] W底反転(MA5上抜)")
 
             # 💡 3. 🟢 押し目拾い型
