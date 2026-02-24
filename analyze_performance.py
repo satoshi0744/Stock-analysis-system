@@ -28,6 +28,7 @@ def process_backtest_ticker(code, nk_data, start_str, end_str):
             df.index = df.index.tz_localize(None)
             
             df['MA5'] = df['Close'].rolling(window=5).mean()
+            df['MA25'] = df['Close'].rolling(window=25).mean()  # 💡 MA25を追加
             df['MA75'] = df['Close'].rolling(window=75).mean()
             df['MA200'] = df['Close'].rolling(window=200).mean()
             df['Vol_Avg20'] = df['Volume'].rolling(window=20).mean().shift(1)
@@ -56,11 +57,13 @@ def process_backtest_ticker(code, nk_data, start_str, end_str):
                 (df['Close'] > df['High_20'])
             )
             
+            # 💡 底打ち確認型の超・厳格化
             m_reversal = (
                 (df['Low'] <= df['Low_20'] * 1.05) & 
                 (df['Low'] >= df['Low_20']) & 
                 is_yosen & 
-                (df['RSI'] <= 40) &
+                (df['RSI'] <= 30) &
+                (df['Close'] < df['MA25'] * 0.95) &
                 (df['Close'] > df['MA5'])
             )
             
@@ -165,7 +168,6 @@ def analyze():
         st_win_rate = (data["wins"] / st_trades * 100) if st_trades > 0 else 0.0
         st_avg_return = (data["return_pct"] / st_trades) if st_trades > 0 else 0.0
         
-        # 💡 ここを元に戻しました（データ保存は英語のまま、画面表示だけ日本語）
         summary["strategies"][strategy] = {
             "total_signals": st_trades,
             "win_rate": round(st_win_rate, 2),
