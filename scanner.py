@@ -26,18 +26,17 @@ def check_market_trend(start_str, end_str):
         latest = df.iloc[-1]
         prev = df.iloc[-2]
         
-        # すべてのMAを上回り、かつ本日が続落でない場合のみ「良好」
+        # 厳格判定：MAを上回っていても、本日がマイナス引けなら「調整局面」とする
         is_above_ma200 = bool(latest['Close'] > latest['MA200'])
         is_above_ma25 = bool(latest['Close'] > latest['MA25'])
-        is_above_ma5 = bool(latest['Close'] > latest['MA5'])
-        is_not_falling = bool(latest['Close'] >= prev['Close'])
+        is_falling = bool(latest['Close'] < prev['Close']) 
         
-        if is_above_ma200 and is_above_ma25 and is_above_ma5 and is_not_falling:
+        if is_above_ma200 and is_above_ma25 and not is_falling:
             is_good = True
             text = "🟩 良好 (短期・中期・長期すべて上向き)"
-        elif is_above_ma200 and (not is_above_ma25 or is_not_falling == False):
+        elif is_above_ma200 and (not is_above_ma25 or is_falling):
             is_good = False
-            text = "🟨 調整局面 (続落・短期トレンド崩れ)"
+            text = "🟨 調整局面 (地合い続落・静観推奨)"
         else:
             is_good = False
             text = "⚠️ 警戒 (長期トレンド下落中)"
@@ -52,7 +51,6 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
         if df.empty or len(df) < 200: return None
         df.index = df.index.tz_localize(None)
         
-        df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA25'] = df['Close'].rolling(window=25).mean()
         df['MA75'] = df['Close'].rolling(window=75).mean()
         df['MA200'] = df['Close'].rolling(window=200).mean()
@@ -79,14 +77,14 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
             group = "A"
             signals.append("🔄 底打ち確認型")
 
-        history = [{"time": i.strftime('%Y-%m-%d'), "open": r['Open'], "high": r['High'], "low": r['Low'], "close": r['Close'], "volume": r['Volume'], "ma25": r['MA25'], "ma75": r['MA75'], "ma200": r['MA200']} for i, r in df.tail(120).iterrows()]
+        history = [{"time": i.strftime('%Y-%m-%d'), "open": float(r['Open']), "high": float(r['High']), "low": float(r['Low']), "close": float(r['Close']), "volume": float(r['Volume']), "ma25": float(r['MA25']), "ma75": float(r['MA75']), "ma200": float(r['MA200'])} for i, r in df.tail(120).iterrows()]
 
         return {
             "group": group,
             "data": {
                 "code": code, "name": name, "price": int(latest['Close']), "price_diff": int(latest['Close'] - prev['Close']),
                 "rsi": rsi, "signals": signals, "history_data": history, "position": "200日線上" if latest['Close'] > latest['MA200'] else "200日線下",
-                "vol_text": f"{latest['Volume']/10000:.1f}万株", "ai_comment": f"RSI {rsi}。{'上昇トレンド維持' if latest['Close'] > latest['MA25'] else '調整局面。底打ちを待つ状態'}。"
+                "vol_text": f"{latest['Volume']/10000:.1f}万株", "ai_comment": f"RSIは{rsi}。地合いの影響を注視。"
             }
         }
     except: return None
