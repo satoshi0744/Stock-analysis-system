@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TradingView 最小構成テスト</title>
+</head>
+<body style="background-color: #121212; color: white; font-family: sans-serif; padding: 20px;">
+    <h2>TradingView 検証用環境</h2>
+    <p style="color: #aaa; font-size: 0.9rem;">※エラー原因の切り分けのため、インジケーター等の設定をすべて排除した最小構成です。</p>
+    
+    <input type="text" id="test-input" value="7203" placeholder="銘柄コード" style="padding: 10px; font-size: 16px; width: 150px;">
+    <button onclick="testChart()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">チャート表示</button>
+
+    <div id="tv-test-container" style="height: 500px; width: 100%; margin-top: 20px; border: 1px solid #555;"></div>
+
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+        function testChart() {
+            let input = document.getElementById("test-input").value.trim();
+            if (!input) return;
+
+            // コンソールログ出力（ブラウザのF12開発者ツールでエラーを追跡するため）
+            let symbol = "TSE:" + input;
+            console.log("要求シンボル:", symbol);
+
+            document.getElementById("tv-test-container").innerHTML = "";
+
+            // インジケーター(studies)を一切含まない、最もピュアな呼び出し
+            new TradingView.widget({
+                "autosize": true,
+                "symbol": symbol,
+                "interval": "D",
+                "timezone": "Asia/Tokyo",
+                "theme": "dark",
+                "style": "1",
+                "locale": "ja",
+                "enable_publishing": false,
+                "hide_top_toolbar": false,
+                "hide_legend": false,
+                "save_image": false,
+                "container_id": "tv-test-container"
+            });
+        }
+    </script>
+</body>
+</html>
