@@ -177,8 +177,13 @@
       }
 
       function loadChart() {
-        const input = document.getElementById("ticker-input").value.trim();
+        let input = document.getElementById("ticker-input").value.trim();
         if (!input) return;
+
+        // 🚨【修正1】全角数字を半角に自動変換（スマホ等からの入力エラーを防止）
+        input = input.replace(/[０-９]/g, function(s) {
+            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+        });
 
         // 入力されたコードが数字のみの場合、TSE(東京証券取引所)プレフィックスを付ける
         const symbol = /^\d+$/.test(input) ? `TSE:${input}` : input;
@@ -200,14 +205,15 @@
           hide_legend: false,
           save_image: false,
           container_id: "tv-widget-container",
+          // 🚨【修正2】MASimpleの重複を削除（これがエラーとApple化の真の原因）
           studies: [
             "Volume@tv-basicstudies",
             "MASimple@tv-basicstudies",
-            "MASimple@tv-basicstudies",
-            "RSI@tv-basicstudies",
+            "RSI@tv-basicstudies"
           ],
         });
       }
     </script>
   </body>
 </html>
+
