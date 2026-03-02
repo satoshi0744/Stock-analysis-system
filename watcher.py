@@ -119,4 +119,87 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
                     rsi <= 30 and 
                     latest['Close'] < latest['MA25'] * 0.95 and 
                     latest['Close'] > latest['MA5']):
-                    signals.
+                    signals.append("🔄 [底打ち確認型] W底反転(MA5上抜)")
+
+            ma_support = False
+            if pd.notna(latest['MA75']) and latest['Low'] <= latest['MA75'] * 1.03 and latest['Close'] > latest['MA75']:
+                ma_support = True
+            if pd.notna(latest['MA200']) and latest['Low'] <= latest['MA200'] * 1.03 and latest['Close'] > latest['MA200']:
+                ma_support = True
+                
+            if ma_support and is_yosen:
+                if "🔄 [底打ち確認型] W底反転(MA5上抜)" not in signals:
+                    signals.append("🟢 [押し目拾い型] MA支持線反発")
+
+            if prev['MA25'] <= prev['MA75'] and latest['MA25'] > latest['MA75']:
+                signals.append("🌟 ゴールデンクロス発生")
+            if prev['MA25'] >= prev['MA75'] and latest['MA25'] < latest['MA75']:
+                signals.append("⚠️ デッドクロス発生")
+
+            # 💡 【追加】本物のAI (IPPO) による分析を実行
+            if api_key:
+                tech_data = {
+                    'RSI': f"{rsi} ({rsi_trend})",
+                    'ポジション': position,
+                    'シグナル': ", ".join(signals) if signals else "特になし",
+                    '出来高': vol_text
+                }
+                news_list = fetch_recent_news(code, limit=3) # 最新ニュースを3件取得
+                ai_comment = get_ai_analysis(code, price, tech_data, news_list, api_key)
+            else:
+                # APIキーがない場合は従来の定型文を使う
+                ai_comment = generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio)
+
+            df_clean = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(120)
+            history_data = []
+            for date_index, row in df_clean.iterrows():
+                history_data.append({
+                    "time": date_index.strftime('%Y-%m-%d'),
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close']),
+                    "volume": float(row['Volume']),
+                    "ma25": float(row['MA25']) if pd.notna(row['MA25']) else None,
+                    "ma75": float(row['MA75']) if pd.notna(row['MA75']) else None,
+                    "ma200": float(row['MA200']) if pd.notna(row['MA200']) else None
+                })
+
+            return {
+                "code": code, "name": name, "price": price, "price_diff": price_diff,
+                "rsi": rsi, "rsi_trend": rsi_trend, "vol_text": vol_text, "position": position, "signals": signals,
+                "history_data": history_data, "ai_comment": ai_comment, "error": False
+            }
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(base_wait * (2 ** attempt)) 
+            else:
+                return {"code": code, "name": name, "error": True, "error_msg": f"取得失敗: {str(e)}"}
+
+def analyze_watch_tickers(target_date_str=None):
+    results = []
+    
+    if target_date_str:
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').replace(tzinfo=JST)
+        end = target_date + timedelta(hours=23, minutes=59)
+    else:
+        end = datetime.now(JST)
+
+    start = end - timedelta(days=500)
+    start_str = start.strftime('%Y-%m-%d')
+    end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
+
+    # 💡 【重要変更】APIキーを環境変数から取得
+    api_key = os.environ.get("GEMINI_API_KEY")
+
+    # 💡 【重要変更】API制限(15RPM)を回避するため、並列処理をやめて直列処理＋ウェイト(4秒)に変更
+    for code, name in WATCH_TICKERS.items():
+        res = process_watch_ticker(code, name, start_str, end_str, api_key)
+        results.append(res)
+        if api_key:
+            time.sleep(4) # AIに負荷をかけないための安全装置
+            
+    order = list(WATCH_TICKERS.keys())
+    results.sort(key=lambda x: order.index(x['code']))
+            
+    return results
