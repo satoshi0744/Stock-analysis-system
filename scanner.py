@@ -4,6 +4,11 @@ from datetime import datetime, timedelta, timezone
 import concurrent.futures
 import time
 import json
+import os
+
+# AI連携モジュールのインポート
+from ai_analyzer import get_ai_analysis
+from news_fetcher import fetch_recent_news
 
 JST = timezone(timedelta(hours=9))
 
@@ -16,6 +21,7 @@ def load_watchlist():
         return {}
 
 def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_breakout):
+    """【初期判定用】高速スキャン用の定型文"""
     comment = ""
     if group == "A" and is_breakout:
         comment += f"【🚀上昇加速型】過去20日間の高値を明確にブレイクアウト！出来高も{vol_ratio}倍と大口の買いが明白です。過去の統計上、この条件達成時の5日後勝率は「51.4%（平均+0.71%）」であり、明日の寄り付きでの順張りエントリーに最も高い優位性が確認されています。"
@@ -67,7 +73,6 @@ def check_market_trend(start_str, end_str):
             is_good = False
             text = "⚠️ 警戒 (日経平均 200日線下)"
             
-        # 💡 ここで日経平均の数値データを取得
         nikkei_data = {
             "open": int(latest['Open']),
             "high": int(latest['High']),
@@ -151,6 +156,7 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
                     signals.append("🔄 [底打ち確認型] RSI低位・MA25乖離")
 
                 group = "A" if (is_good_market and is_yosen and is_above_ma200 and is_breakout) or ("底打ち" in str(signals)) else "B"
+                # ここではいったん高速処理のための定型文を入れておく
                 ai_comment = generate_ai_comment(group, round(float(vol_ratio), 1), is_yosen, is_above_ma200, rsi, is_breakout)
 
                 return {"group": group, "data": {
@@ -173,11 +179,12 @@ def scan_b_type(target_date_str=None):
     start_str = (end - timedelta(days=500)).strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     
-    # 💡 戻り値を3つ（日経データ込み）で受け取る
     is_good_market, market_text, nikkei_data = check_market_trend(start_str, end_str)
     
     scan_a = []
     scan_b = []
+    
+    # 1. まずは全銘柄を非同期で高速スキャンする
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(process_ticker, code, name, start_str, end_str, is_good_market): code for code, name in watchlist.items()}
         for future in concurrent.futures.as_completed(futures):
@@ -185,7 +192,33 @@ def scan_b_type(target_date_str=None):
             if result is not None:
                 if result["group"] == "A": scan_a.append(result["data"])
                 elif result["group"] == "B": scan_b.append(result["data"])
-            
+
+    # 💡 2. 【追加】A群（本命）に選ばれた銘柄に対してのみ、本物のAI分析を実行してコメントを上書きする
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key and scan_a:
+        print(f"\n🧠 A群（{len(scan_a)}銘柄）に対してAI参謀 IPPO による深掘り分析を開始します...")
+        for item in scan_a:
+            try:
+                # AIに渡すためのデータを整形
+                tech_data = {
+                    'RSI': f"{item['rsi']} ({item['rsi_trend']})",
+                    'ポジション': item['position'],
+                    'シグナル': ", ".join(item['signals']) if item['signals'] else "特になし",
+                    '出来高': item['vol_text']
+                }
+                # 直近ニュースを取得（最大3件）
+                news_list = fetch_recent_news(item['code'], limit=3)
+                
+                # 本物のAI分析を呼び出し、初期の定型文を上書きする
+                ai_comment = get_ai_analysis(item['code'], item['price'], tech_data, news_list, api_key)
+                item['ai_comment'] = ai_comment
+                
+                # API制限(15RPM)を完全に回避するための安全装置（4秒待機）
+                time.sleep(4)
+            except Exception as e:
+                print(f"⚠️ AI分析エラー ({item['code']}): {e} (定型文を維持します)")
+                # エラーが起きた場合は、初期の定型文がそのまま画面に出るので安全です
+
     return {
         "market_info": {"is_good": is_good_market, "text": market_text, "nikkei_data": nikkei_data},
         "scan_a": scan_a,
