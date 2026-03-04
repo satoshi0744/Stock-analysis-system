@@ -4,11 +4,10 @@ from datetime import datetime, timedelta, timezone
 import concurrent.futures
 import time
 import json
-import os
-
-# AI連携モジュールのインポート
-from ai_analyzer import get_ai_analysis
-from news_fetcher import fetch_recent_news
+# 🚨 新規追加インポート
+import urllib.parse
+import feedparser
+import requests
 
 JST = timezone(timedelta(hours=9))
 
@@ -20,8 +19,96 @@ def load_watchlist():
         print(f"Watchlist load error: {e}")
         return {}
 
+# 🚨 個別ニュース取得
+def fetch_recent_news(ticker_code):
+    query = urllib.parse.quote(f"{ticker_code} 株")
+    url = f"https://news.google.com/rss/search?q={query}&hl=ja&gl=JP&ceid=JP:ja"
+    news_list = []
+    try:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:3]:
+            news_list.append({"title": entry.title, "link": entry.link})
+    except Exception: pass
+    return news_list
+
+# 🚨 マクロニュース取得
+def fetch_top_macro_news(limit=3):
+    url = "https://news.yahoo.co.jp/rss/topics/business.xml"
+    news_list = []
+    try:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:limit]:
+            news_list.append({"title": entry.title, "link": entry.link})
+    except Exception: pass
+    return news_list
+
+# 🚨 マクロデータ取得
+def fetch_macro_data():
+    tickers = {"日経平均": "^N225", "S&P500": "^GSPC", "SOX指数": "^SOX", "VIX恐怖指数": "^VIX", "ドル円": "JPY=X"}
+    macro_info = {}
+    for name, ticker in tickers.items():
+        try:
+            data = yf.download(ticker, period="5d", progress=False)
+            if not data.empty:
+                if isinstance(data.columns, pd.MultiIndex):
+                    data.columns = [col[0] for col in data.columns]
+                data = data.dropna(subset=['Close'])
+                if len(data) >= 2:
+                    latest = float(data['Close'].iloc[-1])
+                    prev = float(data['Close'].iloc[-2])
+                    diff = latest - prev
+                    sign = "+" if diff > 0 else ""
+                    macro_info[name] = f"{latest:,.2f} (前日比: {sign}{diff:,.2f})"
+                elif len(data) == 1:
+                    macro_info[name] = f"{float(data['Close'].iloc[-1]):,.2f}"
+                else: macro_info[name] = "N/A"
+        except Exception: pass
+    return macro_info
+
+# 🚨 IPPOによる大胆予測（A群トップ銘柄専用）
+def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key):
+    if not api_key: return ""
+    
+    news_list = fetch_recent_news(ticker_code)
+    macro_news_list = fetch_top_macro_news(limit=3)
+    macro_data = fetch_macro_data()
+    
+    news_text = "\n".join([f"・{n['title']}" for n in news_list]) if news_list else "特になし"
+    macro_text = "\n".join([f"・{k}: {v}" for k, v in macro_data.items()])
+    macro_news_text = "\n".join([f"・{n['title']}" for n in macro_news_list]) if macro_news_list else "特になし"
+    
+    prompt = f"""
+    対象銘柄:{ticker_code} {name} / 現在値:{price}円
+    個別テクニカルデータ:{tech_data}
+    直近ニュース（個別）:{news_text}
+    現在の世界マクロ経済データ:{macro_text}
+    【重要】現在の世界・国内トップニュース:{macro_news_text}
+    
+    あなたはプロのAIストラテジスト「IPPO」です。挨拶不要。
+    この銘柄は本日のシステム分析で最も勢いのある「一推し銘柄」として選出されました。
+    提供された「事実」と「マクロ経済ニュース」を統合し、以下の構成ルールに厳密に従ってレポートを出力してください。
+    ※重要: ```html などのマークダウン記法は絶対に避け、純粋なHTMLタグとテキストのみを出力してください。
+
+    【出力構成ルール】
+    「<h4>🚀 IPPOの渾身の大胆予測シナリオ</h4>」という小見出しをつけ、投資ストラテジストとしてのあなたの大胆な短期相場予測（数日〜数週間の動き）を熱く語ってください。
+    - 【絶対遵守】ダラダラとした長文を避け、必ず行頭に「・」を置いた箇条書き形式で出力すること。
+    - チャートの形状、個別ニュース、そして【マクロ経済データや世界トップニュース】がこの銘柄にどう影響するかをロジカルかつドラマチックに説明すること。
+    """
+
+    url = f"[https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=){api_key}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        if response.status_code == 200:
+            answer = response.json()['candidates'][0]['content']['parts'][0]['text']
+            answer = answer.replace("```html\n", "").replace("```html", "").replace("```", "").strip()
+            answer = answer.replace("\n・", "<br><br>・")
+            return answer
+        else: return "【APIエラー】予測を取得できませんでした"
+    except Exception: return "【通信エラー】予測を取得できませんでした"
+
 def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_breakout):
-    """【初期判定用】高速スキャン用の定型文"""
     comment = ""
     if group == "A" and is_breakout:
         comment += f"【🚀上昇加速型】過去20日間の高値を明確にブレイクアウト！出来高も{vol_ratio}倍と大口の買いが明白です。過去の統計上、この条件達成時の5日後勝率は「51.4%（平均+0.71%）」であり、明日の寄り付きでの順張りエントリーに最も高い優位性が確認されています。"
@@ -29,28 +116,21 @@ def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_brea
         comment += f"【本命シグナル】出来高急増（{vol_ratio}倍）を伴い前日高値を抜けました。200日線上の強い上昇トレンドに乗る形ですが、直近高値の更新（完全なブレイクアウト）には至っていません。"
     else:
         comment += f"【動意確認】出来高は{vol_ratio}倍と資金流入が見られますが、"
-        if not is_yosen:
-            comment += "前日高値を抜けきれず上値の重さが残ります。"
-        elif not is_above_ma200:
-            comment += "200日線の下にあり、長期トレンドは依然として下落・調整局面です。"
-        else:
-            comment += "地合い等のフィルターにより本命からは外れました。"
+        if not is_yosen: comment += "前日高値を抜けきれず上値の重さが残ります。"
+        elif not is_above_ma200: comment += "200日線の下にあり、長期トレンドは依然として下落・調整局面です。"
+        else: comment += "地合い等のフィルターにより本命からは外れました。"
 
     if type(rsi) != str:
-        if rsi >= 75:
-            comment += f" ただし、RSIが{rsi}と短期的な過熱感を示しており、高値掴みには警戒が必要です。"
-        elif rsi <= 30:
-            comment += f" RSIは{rsi}と売られすぎ水準にあり、自律反発に優位性が見込めます。"
-        elif group == "A" and 40 <= rsi <= 70:
-            comment += f" RSIも{rsi}と過熱感はなく、ここから上値余地が十分に狙える理想的な状態です。"
+        if rsi >= 75: comment += f" ただし、RSIが{rsi}と短期的な過熱感を示しており、高値掴みには警戒が必要です。"
+        elif rsi <= 30: comment += f" RSIは{rsi}と売られすぎ水準にあり、自律反発に優位性が見込めます。"
+        elif group == "A" and 40 <= rsi <= 70: comment += f" RSIも{rsi}と過熱感はなく、ここから上値余地が十分に狙える理想的な状態です。"
     return comment
 
 def check_market_trend(start_str, end_str):
     try:
         ticker = yf.Ticker("^N225")
         df = ticker.history(start=start_str, end=end_str)
-        if df.empty or len(df) < 200:
-            return False, "判定不能", {}
+        if df.empty or len(df) < 200: return False, "判定不能", {}
         
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA25'] = df['Close'].rolling(window=25).mean()
@@ -64,38 +144,24 @@ def check_market_trend(start_str, end_str):
         is_falling = bool(latest['Close'] < prev['Close'])
         
         if is_above_ma200 and is_above_ma25 and is_above_ma5 and not is_falling:
-            is_good = True
-            text = "🟩 良好 (短期・中期・長期すべて上向き)"
+            is_good, text = True, "🟩 良好 (短期・中期・長期すべて上向き)"
         elif is_above_ma200 and (not is_above_ma25 or is_falling):
-            is_good = False
-            text = "🟨 調整局面 (日経平均 続落・短期トレンド崩れ)"
+            is_good, text = False, "🟨 調整局面 (日経平均 続落・短期トレンド崩れ)"
         else:
-            is_good = False
-            text = "⚠️ 警戒 (日経平均 200日線下)"
+            is_good, text = False, "⚠️ 警戒 (日経平均 200日線下)"
             
-        nikkei_data = {
-            "open": int(latest['Open']),
-            "high": int(latest['High']),
-            "low": int(latest['Low']),
-            "close": int(latest['Close']),
-            "diff": int(latest['Close'] - prev['Close'])
-        }
-            
+        nikkei_data = {"open": int(latest['Open']), "high": int(latest['High']), "low": int(latest['Low']), "close": int(latest['Close']), "diff": int(latest['Close'] - prev['Close'])}
         return is_good, text, nikkei_data
-    except Exception as e:
-        return False, "データ取得エラー", {}
+    except Exception: return False, "データ取得エラー", {}
 
 def process_ticker(code, name, start_str, end_str, is_good_market):
     max_retries = 3
     base_wait = 2
-
     for attempt in range(max_retries):
         try:
             ticker = yf.Ticker(f"{code}.T")
             df = ticker.history(start=start_str, end=end_str)
-            
-            if df.empty or len(df) < 200: 
-                return None
+            if df.empty or len(df) < 200: return None
                 
             df.index = df.index.tz_localize(None)
             df['MA25'] = df['Close'].rolling(window=25).mean()
@@ -156,7 +222,6 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
                     signals.append("🔄 [底打ち確認型] RSI低位・MA25乖離")
 
                 group = "A" if (is_good_market and is_yosen and is_above_ma200 and is_breakout) or ("底打ち" in str(signals)) else "B"
-                # ここではいったん高速処理のための定型文を入れておく
                 ai_comment = generate_ai_comment(group, round(float(vol_ratio), 1), is_yosen, is_above_ma200, rsi, is_breakout)
 
                 return {"group": group, "data": {
@@ -166,11 +231,12 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
                     "rsi": rsi, "rsi_trend": rsi_trend, "vol_text": vol_text, "ai_comment": ai_comment
                 }}
             return None
-        except Exception as e:
+        except Exception:
             if attempt < max_retries - 1: time.sleep(base_wait * (2 ** attempt))
             else: return None
 
-def scan_b_type(target_date_str=None):
+# 🚨【修正】api_key を受け取るように変更
+def scan_b_type(target_date_str=None, api_key=""):
     watchlist = load_watchlist()
     if not watchlist:
         return {"market_info": {"is_good": False, "text": "監視リスト読込エラー", "nikkei_data": {}}, "scan_a": [], "scan_b": []}
@@ -183,8 +249,6 @@ def scan_b_type(target_date_str=None):
     
     scan_a = []
     scan_b = []
-    
-    # 1. まずは全銘柄を非同期で高速スキャンする
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(process_ticker, code, name, start_str, end_str, is_good_market): code for code, name in watchlist.items()}
         for future in concurrent.futures.as_completed(futures):
@@ -192,33 +256,18 @@ def scan_b_type(target_date_str=None):
             if result is not None:
                 if result["group"] == "A": scan_a.append(result["data"])
                 elif result["group"] == "B": scan_b.append(result["data"])
-
-    # 💡 2. 【追加】A群（本命）に選ばれた銘柄に対してのみ、本物のAI分析を実行してコメントを上書きする
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key and scan_a:
-        print(f"\n🧠 A群（{len(scan_a)}銘柄）に対してAI参謀 IPPO による深掘り分析を開始します...")
-        for item in scan_a:
-            try:
-                # AIに渡すためのデータを整形
-                tech_data = {
-                    'RSI': f"{item['rsi']} ({item['rsi_trend']})",
-                    'ポジション': item['position'],
-                    'シグナル': ", ".join(item['signals']) if item['signals'] else "特になし",
-                    '出来高': item['vol_text']
-                }
-                # 直近ニュースを取得（最大3件）
-                news_list = fetch_recent_news(item['code'], limit=3)
                 
-                # 本物のAI分析を呼び出し、初期の定型文を上書きする
-                ai_comment = get_ai_analysis(item['code'], item['price'], tech_data, news_list, api_key)
-                item['ai_comment'] = ai_comment
-                
-                # API制限(15RPM)を完全に回避するための安全装置（4秒待機）
-                time.sleep(4)
-            except Exception as e:
-                print(f"⚠️ AI分析エラー ({item['code']}): {e} (定型文を維持します)")
-                # エラーが起きた場合は、初期の定型文がそのまま画面に出るので安全です
-
+    # 🚨【新規追加】A群から「一推し銘柄」を1つだけ選定し、大胆予測を取得
+    if scan_a:
+        # 出来高倍率が高い順に並び替え
+        scan_a = sorted(scan_a, key=lambda x: x.get('vol_ratio', 0), reverse=True)
+        if api_key:
+            top_pick = scan_a[0]
+            top_pick['is_top_pick'] = True
+            tech_data = f"RSI:{top_pick.get('rsi')}, 出来高:{top_pick.get('vol_text')}, シグナル:{','.join(top_pick.get('signals', []))}"
+            bold_comment = get_ai_bold_prediction(top_pick['code'], top_pick['name'], top_pick['price'], tech_data, api_key)
+            top_pick['bold_prediction'] = bold_comment
+            
     return {
         "market_info": {"is_good": is_good_market, "text": market_text, "nikkei_data": nikkei_data},
         "scan_a": scan_a,

@@ -7,10 +7,18 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 from scanner import scan_b_type
 from watcher import analyze_watch_tickers
-from report_generator import generate_files
+from report_generator import generate_files, load_previous_report
 
 # 日本時間のタイムゾーン設定
 JST = timezone(timedelta(hours=9))
+
+# 🚨【新規追加】APIキーを環境変数またはテキストファイルから読み込む
+def load_api_key():
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key and os.path.exists("api_key.txt"):
+        with open("api_key.txt", "r", encoding="utf-8") as f:
+            key = f.read().strip()
+    return key
 
 def send_email(text_body, subject=None):
     user = os.environ.get("GMAIL_USER")
@@ -52,7 +60,6 @@ def check_market_updated():
 def main():
     today_str = datetime.now(JST).strftime('%Y-%m-%d')
     
-    # 🛡️ 休日フィルター（安全装置）の実行
     is_updated, latest_date = check_market_updated()
     
     if not is_updated:
@@ -63,26 +70,24 @@ def main():
         body += "誤ったデータによる統計汚染を防ぐための正常な処理ストップです。\n"
         body += "相場再開日のデータが揃い次第、自動的に正常稼働いたします。\n"
         print(f"データ未更新のため本来はここで終了します。最新データ日付: {latest_date}")
-        # 【テスト用一時解除】ローカルでHTML出力を確認するため、以下の2行をコメントアウトしています
-        # send_email(body, subject)
         # sys.exit(0)
 
     print("🚀 [START] 株価分析システム 本番バッチ処理を開始します...")
     
-    # 1. 監視銘柄（ウォッチャー）の分析
     print("\n🔍 監視銘柄の分析を開始...")
     watch_results = analyze_watch_tickers()
     print(f"✅ 監視銘柄の分析完了: {len(watch_results)}銘柄")
 
-    # 2. 全銘柄スキャン（A群・B群の判定）
     print("\n🔍 市場全体のスキャンを開始...")
-    scan_results = scan_b_type()
+    # 🚨【修正】APIキーを取得してスキャナーに渡す
+    gemini_api_key = load_api_key()
+    scan_results = scan_b_type(api_key=gemini_api_key)
     print(f"✅ スキャン完了: A群 {len(scan_results['scan_a'])}銘柄 / B群 {len(scan_results['scan_b'])}銘柄")
 
-    # 3. HTMLレポートの生成（ダッシュボード構築）
     print("\n📊 ダッシュボードの生成を開始...")
     os.makedirs("public", exist_ok=True)
-    generate_files(watch_results, scan_results)
+    prev_report = load_previous_report()
+    generate_files(watch_results, scan_results, prev_report=prev_report)
     print("✅ ダッシュボード生成完了: public/index.html")
     
     print("\n📧 メール配信準備中...")
@@ -90,11 +95,12 @@ def main():
     scan_a = scan_results.get("scan_a", [])
     
     body = f"【📈 本日の相場環境】\n{market_info.get('text', '')}\n\n"
-    
     body += "【👑 本日の条件達成銘柄】\n"
     if scan_a:
         for item in scan_a:
-            body += f"・{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
+            # 一推し銘柄には🌟マークをつける
+            star = "🌟(一推し) " if item.get("is_top_pick") else ""
+            body += f"・{star}{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
     else:
         body += "・本日の鉄板条件クリア銘柄なし（休むも相場です）\n"
     body += "\n"
@@ -119,11 +125,6 @@ def main():
     pages_url = f"https://{username}.github.io/{repo_name}/"
     
     body += f"ダッシュボードはこちら: {pages_url}\n\n"
-    body += "【💡 投資用語メモ】\n"
-    body += "・RSI：過熱感の指標（70以上買われすぎ、30以下売られすぎ）。\n"
-    body += "・200日線：過去約1年の平均。長期トレンドの最重要ライン。\n"
-    body += "・出来高急増：大口資金流入のサイン。\n"
-    
     send_email(body)
     
     print("\n🎉 [SUCCESS] すべての処理が正常に完了し、メール送信を予約しました！")

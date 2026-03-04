@@ -4,7 +4,20 @@ from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
 
-def generate_files(watch_data, scan_data_dict):
+def load_previous_report():
+    history_dir = "public/history"
+    if os.path.exists(history_dir):
+        files = sorted([f for f in os.listdir(history_dir) if f.endswith(".json")], reverse=True)
+        now_date = datetime.now(JST).strftime('%Y-%m-%d')
+        for f_name in files:
+            if f_name != f"{now_date}.json":
+                try:
+                    with open(os.path.join(history_dir, f_name), "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception: pass
+    return None
+
+def generate_files(watch_data, scan_data_dict, prev_report=None):
     os.makedirs("public", exist_ok=True)
     os.makedirs("public/history", exist_ok=True)
     
@@ -16,8 +29,7 @@ def generate_files(watch_data, scan_data_dict):
         with open("watchlist.json", "r", encoding="utf-8") as f:
             order = list(json.load(f).keys())
         watch_data = sorted(watch_data, key=lambda x: order.index(x['code']) if x['code'] in order else 999)
-    except Exception as e:
-        pass
+    except Exception: pass
         
     report_dict = {"updated_at": now_str, "date": date_str, "watch_data": watch_data, "scan_data": scan_data_dict}
     with open("public/report.json", "w", encoding="utf-8") as f: json.dump(report_dict, f, ensure_ascii=False, indent=2)
@@ -32,7 +44,6 @@ def generate_files(watch_data, scan_data_dict):
     scan_a = scan_data_dict.get("scan_a", [])
     scan_b = scan_data_dict.get("scan_b", [])
 
-    # 💡 日経平均の数値ボード生成
     nikkei_html = ""
     if nikkei:
         diff = nikkei.get('diff', 0)
@@ -52,7 +63,69 @@ def generate_files(watch_data, scan_data_dict):
             </div>
         </div>
         """
-            
+        
+    reflection_html = ""
+    if prev_report and prev_report.get("scan_a"):
+        prev_date = prev_report.get("date", "前回")
+        reflection_html += f'<h2 style="color: #b388ff; border-left: 4px solid #b388ff; margin-top: 25px; margin-bottom: 10px;">🔄 昨日のA群（本命）の答え合わせ [{prev_date}]</h2>'
+        all_today_items = watch_data + scan_a + scan_b
+        today_price_dict = {item["code"]: item.get("price") for item in all_today_items if "code" in item}
+
+        for prev_item in prev_report["scan_a"]:
+            code = prev_item.get("code")
+            name = prev_item.get("name", "")
+            prev_price = prev_item.get("price", 0)
+            today_price = today_price_dict.get(code)
+
+            if today_price and prev_price > 0:
+                diff = today_price - prev_price
+                pct = (diff / prev_price) * 100
+                diff_str = f"+{diff:,}円" if diff > 0 else (f"{diff:,}円" if diff < 0 else "±0円")
+                pct_str = f"+{pct:.2f}%" if pct > 0 else f"{pct:.2f}%"
+                color_class = "diff-up" if diff > 0 else ("diff-down" if diff < 0 else "diff-even")
+                color_hex = "#69f0ae" if diff > 0 else ("#ff5252" if diff < 0 else "#9e9e9e")
+
+                reflection_html += f'''
+                <div class="card" style="border-left: 4px solid {color_hex}; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-weight: bold; color: #fff; font-size: 1.1rem;">{code} {name}</span>
+                            <div style="font-size: 0.85rem; color: #aaa; margin-top: 4px;">昨日の推奨値: {prev_price:,}円</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.85rem; color: #aaa;">本日の終値</div>
+                            <strong style="font-size: 1.2rem; color: #fff;">{today_price:,}円</strong>
+                            <span class="{color_class}" style="margin-left: 8px;">{diff_str} ({pct_str})</span>
+                        </div>
+                    </div>
+                </div>
+                '''
+            else:
+                reflection_html += f'''
+                <div class="card" style="border-left: 4px solid #757575; margin-bottom: 8px;">
+                    <span style="font-weight: bold; color: #fff;">{code} {name}</span>
+                    <span style="font-size: 0.85rem; color: #aaa; margin-left: 10px;">(本日の価格データ取得できず)</span>
+                </div>
+                '''
+
+    top_pick_html = ""
+    if scan_a and scan_a[0].get("is_top_pick"):
+        top_item = scan_a[0]
+        bold_pred = top_item.get("bold_prediction", "")
+        if bold_pred:
+            top_pick_html = f"""
+            <div class="card" style="border: 2px solid #ffd700; background: linear-gradient(145deg, #2a2000, #1a1a1a); margin-top: 15px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.15);">
+                <h2 style="color: #ffd700; margin-top: 0; border-bottom: 1px solid #554400; padding-bottom: 8px;">🌟 IPPOの渾身の一推し銘柄</h2>
+                <div style="font-size: 1.3rem; font-weight: bold; color: #fff; margin-bottom: 10px;">
+                    {top_item['code']} {top_item.get('name', '')} 
+                    <span style="font-size: 0.95rem; font-weight: normal; margin-left: 12px; color: #ccc;">現在値: {top_item.get('price', 0):,}円</span>
+                </div>
+                <div class="ai-report" style="color: #e0e0e0; line-height: 1.8; font-size: 0.95rem;">
+                    {bold_pred}
+                </div>
+            </div>
+            """
+
     html = f"""<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -110,6 +183,9 @@ def generate_files(watch_data, scan_data_dict):
         </div>
         {nikkei_html}
     </div>
+
+    {reflection_html}
+    {top_pick_html}
 
     <h2 style="color: #ffab00; border-left: 4px solid #ffab00; margin-top: 5px;">👑 本日の条件達成銘柄</h2>
 """
@@ -276,7 +352,8 @@ def generate_files(watch_data, scan_data_dict):
     watch_data_json = json.dumps(watch_data, ensure_ascii=False)
     scan_a_json = json.dumps(scan_a, ensure_ascii=False)
     
-    html += f"""
+    # 🚨【修正ポイント】f文字列をやめて通常の文字列にし、エラーを完全に回避しました
+    html += """
     <div class="glossary">
         <div style="font-weight:bold; font-size:1rem; margin-bottom:8px; border-bottom:1px solid #333; padding-bottom:5px;">💡 投資用語メモ</div>
         <dl>
@@ -287,80 +364,77 @@ def generate_files(watch_data, scan_data_dict):
     </div>
 
     <script>
-        const watchData = {watch_data_json};
-        const scanData = {scan_a_json};
+        const watchData = """ + watch_data_json + """;
+        const scanData = """ + scan_a_json + """;
         
-        function renderChart(item, prefix) {{
+        function renderChart(item, prefix) {
             const containerId = 'chart-' + prefix + '-' + item.code;
-            if(item.history_data && document.getElementById(containerId)) {{
+            if(item.history_data && document.getElementById(containerId)) {
                 const container = document.getElementById(containerId);
-                const chart = LightweightCharts.createChart(container, {{
+                const chart = LightweightCharts.createChart(container, {
                     autoSize: true,
-                    layout: {{ background: {{ type: 'solid', color: '#1e1e1e' }}, textColor: '#d1d4dc', }},
-                    grid: {{ vertLines: {{ color: '#2b2b43' }}, horzLines: {{ color: '#2b2b43' }} }},
-                    rightPriceScale: {{ borderColor: '#2b2b43' }},
-                    timeScale: {{ borderColor: '#2b2b43', timeVisible: true }},
+                    layout: { background: { type: 'solid', color: '#1e1e1e' }, textColor: '#d1d4dc', },
+                    grid: { vertLines: { color: '#2b2b43' }, horzLines: { color: '#2b2b43' } },
+                    rightPriceScale: { borderColor: '#2b2b43' },
+                    timeScale: { borderColor: '#2b2b43', timeVisible: true },
                     handleScroll: false,
                     handleScale: false
-                }});
-
-                const candleSeries = chart.addCandlestickSeries({{
+                });
+                const candleSeries = chart.addCandlestickSeries({
                     upColor: '#FF5252', downColor: '#26a69a', borderVisible: false,
                     wickUpColor: '#FF5252', wickDownColor: '#26a69a'
-                }});
-
-                const ma25Series = chart.addLineSeries({{
+                });
+                const ma25Series = chart.addLineSeries({
                     color: '#2962FF', lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-                }});
-                const ma75Series = chart.addLineSeries({{
+                });
+                const ma75Series = chart.addLineSeries({
                     color: '#FF5252', lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-                }});
-                const ma200Series = chart.addLineSeries({{
+                });
+                const ma200Series = chart.addLineSeries({
                     color: '#FF9800', lineWidth: 2, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
-                }});
-
-                const volumeSeries = chart.addHistogramSeries({{
+                });
+                const volumeSeries = chart.addHistogramSeries({
                     color: '#26a69a', lastValueVisible: false, priceLineVisible: false,
-                    priceFormat: {{ 
+                    priceFormat: { 
                         type: 'custom',
-                        formatter: (price) => {{
+                        formatter: (price) => {
                             if (price >= 100000000) return (price / 100000000).toFixed(1) + '億';
                             if (price >= 10000) return (price / 10000).toFixed(1) + '万';
                             return price.toString();
-                        }}
-                    }},
+                        }
+                    },
                     priceScaleId: 'volume_scale',
-                }});
+                });
+                chart.priceScale('volume_scale').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 }, });
 
-                chart.priceScale('volume_scale').applyOptions({{ scaleMargins: {{ top: 0.8, bottom: 0 }}, }});
-
-                let lastMa25 = null; let lastMa75 = null; let lastMa200 = null;
-                const candleData = []; const volumeData = []; const ma25Data = []; const ma75Data = []; const ma200Data = [];
+                let lastMa25 = null; let lastMa75 = null;
+                let lastMa200 = null;
+                const candleData = []; const volumeData = []; const ma25Data = []; const ma75Data = [];
+                const ma200Data = [];
                 let lastTime = "";
 
-                item.history_data.forEach(d => {{
-                    if (d.open != null && d.close != null && d.time !== lastTime) {{
-                        candleData.push({{ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }});
-                        volumeData.push({{ time: d.time, value: d.volume || 0, color: d.close >= d.open ? 'rgba(255, 82, 82, 0.5)' : 'rgba(38, 166, 154, 0.5)' }});
-                        if (d.ma25 !== undefined && d.ma25 !== null) {{ ma25Data.push({{ time: d.time, value: d.ma25 }}); lastMa25 = d.ma25.toFixed(1); }}
-                        if (d.ma75 !== undefined && d.ma75 !== null) {{ ma75Data.push({{ time: d.time, value: d.ma75 }}); lastMa75 = d.ma75.toFixed(1); }}
-                        if (d.ma200 !== undefined && d.ma200 !== null) {{ ma200Data.push({{ time: d.time, value: d.ma200 }}); lastMa200 = d.ma200.toFixed(1); }}
+                item.history_data.forEach(d => {
+                    if (d.open != null && d.close != null && d.time !== lastTime) {
+                        candleData.push({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close });
+                        volumeData.push({ time: d.time, value: d.volume || 0, color: d.close >= d.open ? 'rgba(255, 82, 82, 0.5)' : 'rgba(38, 166, 154, 0.5)' });
+                        if (d.ma25 !== undefined && d.ma25 !== null) { ma25Data.push({ time: d.time, value: d.ma25 }); lastMa25 = d.ma25.toFixed(1); }
+                        if (d.ma75 !== undefined && d.ma75 !== null) { ma75Data.push({ time: d.time, value: d.ma75 }); lastMa75 = d.ma75.toFixed(1); }
+                        if (d.ma200 !== undefined && d.ma200 !== null) { ma200Data.push({ time: d.time, value: d.ma200 }); lastMa200 = d.ma200.toFixed(1); }
                         lastTime = d.time;
-                    }}
-                }});
+                    }
+                });
 
                 candleSeries.setData(candleData); volumeSeries.setData(volumeData);
                 ma25Series.setData(ma25Data); ma75Series.setData(ma75Data); ma200Series.setData(ma200Data);
                 chart.timeScale().fitContent();
-
                 const legend = document.getElementById('legend-' + item.code);
-                if(legend) {{
-                    legend.innerHTML = `<div><span style="color:#2962FF; font-weight:bold;">■</span> MA25: ${{lastMa25}}</div>
-                                        <div><span style="color:#FF5252; font-weight:bold;">■</span> MA75: ${{lastMa75}}</div>
-                                        <div><span style="color:#FF9800; font-weight:bold;">■</span> MA200: ${{lastMa200}}</div>`;
-                }}
-            }}
-        }}
+                if(legend) {
+                    legend.innerHTML = `<div><span style="color:#2962FF; font-weight:bold;">■</span> MA25: ${lastMa25}</div>
+                                        <div><span style="color:#FF5252; font-weight:bold;">■</span> MA75: ${lastMa75}</div>
+                                        <div><span style="color:#FF9800; font-weight:bold;">■</span> MA200: ${lastMa200}</div>`;
+                }
+            }
+        }
 
         watchData.forEach(item => renderChart(item, 'watch'));
         scanData.forEach(item => renderChart(item, 'scan'));
