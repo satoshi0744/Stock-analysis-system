@@ -52,7 +52,13 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
             ticker = yf.Ticker(f"{code}.T")
             df = ticker.history(start=start_str, end=end_str)
             
-            if df.empty or len(df) < 200:
+            if df.empty:
+                return {"code": code, "name": name, "error": True, "error_msg": "データ取得失敗"}
+                
+            # 欠損値（夜間プレースホルダーや未確定行）の除外
+            df = df.dropna(subset=['Close'])
+            
+            if len(df) < 200:
                 return {"code": code, "name": name, "error": True, "error_msg": "データ不足（新規上場など）"}
                 
             df.index = df.index.tz_localize(None)
@@ -73,6 +79,9 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
             
             latest = df.iloc[-1]
             prev = df.iloc[-2]
+            
+            if pd.isna(latest['Close']) or pd.isna(prev['Close']):
+                return {"code": code, "name": name, "error": True, "error_msg": "終値データ欠損(NaN)"}
             
             price = int(latest['Close'])
             price_diff = int(latest['Close'] - prev['Close'])

@@ -47,6 +47,10 @@ def check_market_updated():
         if df.empty:
             return False, "データ取得失敗"
         
+        df = df.dropna(subset=['Close'])
+        if df.empty:
+            return False, "有効データなし"
+        
         df.index = df.index.tz_localize(None)
         latest_date = df.index[-1].strftime('%Y-%m-%d')
         
@@ -104,6 +108,15 @@ def main():
     else:
         body += "・本日の鉄板条件クリア銘柄なし（休むも相場です）\n"
     body += "\n"
+
+    scan_b = scan_results.get("scan_b", [])
+    if scan_b:
+        body += "【⚡ 出来高急増・注目銘柄（資金流入）】\n"
+        for item in scan_b[:5]:
+            signals_str = " / ".join([s for s in item.get('signals', []) if '出来高' not in s])
+            sig_text = f" ({signals_str})" if signals_str else ""
+            body += f"・{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円{sig_text})\n"
+        body += "\n"
         
     body += "【📋 監視銘柄の状況】\n"
     if watch_results:
