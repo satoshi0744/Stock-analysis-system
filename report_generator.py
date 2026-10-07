@@ -17,13 +17,14 @@ def load_previous_report():
                 except Exception: pass
     return None
 
-def generate_files(watch_data, scan_data_dict, prev_report=None):
+def generate_files(watch_data, scan_data_dict, prev_report=None, data_date=None):
     os.makedirs("public", exist_ok=True)
     os.makedirs("public/history", exist_ok=True)
     
     now = datetime.now(JST)
     now_str = now.strftime('%Y/%m/%d %H:%M')
     date_str = now.strftime('%Y-%m-%d')
+    actual_data_date = data_date if data_date else date_str
     
     try:
         with open("watchlist.json", "r", encoding="utf-8") as f:
@@ -31,9 +32,15 @@ def generate_files(watch_data, scan_data_dict, prev_report=None):
         watch_data = sorted(watch_data, key=lambda x: order.index(x['code']) if x['code'] in order else 999)
     except Exception: pass
         
-    report_dict = {"updated_at": now_str, "date": date_str, "watch_data": watch_data, "scan_data": scan_data_dict}
+    report_dict = {
+        "updated_at": now_str,
+        "date": date_str,
+        "data_date": actual_data_date,
+        "watch_data": watch_data,
+        "scan_data": scan_data_dict
+    }
     with open("public/report.json", "w", encoding="utf-8") as f: json.dump(report_dict, f, ensure_ascii=False, indent=2)
-    with open(f"public/history/{date_str}.json", "w", encoding="utf-8") as f: json.dump(report_dict, f, ensure_ascii=False, indent=2)
+    with open(f"public/history/{actual_data_date}.json", "w", encoding="utf-8") as f: json.dump(report_dict, f, ensure_ascii=False, indent=2)
 
     summary = {"total_signals": 0, "win_rate": 0.0, "avg_return": 0.0, "expectancy": 0.0}
     if os.path.exists("public/performance_summary.json"):
