@@ -2,7 +2,7 @@ name: Market Intelligence (Step 2)
 
 on:
   schedule:
-    - cron: '45 10 * * 1-5' # UTC 10:45 = JST 19:45に実行
+    - cron: '37 9 * * 1-5' # UTC 09:37 = JST 18:37に実行（サーバー混雑ピークを避ける端数分）
   workflow_dispatch:
 
 # --- 追記: 同時実行の制御 (GPT提案) ---
