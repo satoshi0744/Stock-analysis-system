@@ -124,7 +124,7 @@ def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key):
 - 【絶対遵守】ダラダラとした長文を避け、必ず行頭に「・」を置いた箇条書き形式で出力すること。
 - チャートの形状、個別ニュース、そして【マクロ経済データや世界トップニュース】がこの銘柄にどう影響するかをロジカルかつドラマチックに説明すること。
 """
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
     try:
