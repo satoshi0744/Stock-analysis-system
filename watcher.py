@@ -7,6 +7,7 @@ import os
 # AI連携モジュールのインポート（GitHub上にこれらのファイルが必要です）
 from ai_analyzer import get_ai_analysis
 from news_fetcher import fetch_recent_news
+from risk_reward import analyze_candlestick, calculate_risk_reward
 
 JST = timezone(timedelta(hours=9))
 
@@ -16,7 +17,7 @@ WATCH_TICKERS = {
     "7974": "任天堂", "6146": "ディスコ", "4063": "信越化学工業", "8411": "みずほFg"
 }
 
-def generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio):
+def generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio, rr_data=None, candle_data=None):
     """【APIキー未設定時のフォールバック用】従来の定型文エンジン"""
     comment = ""
     if "⚠️ [天井警戒型]" in "".join(signals):
@@ -40,6 +41,12 @@ def generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio):
     if type(rsi) != str:
         if rsi >= 75 and "⚠️ [天井警戒型]" not in "".join(signals):
             comment += f" ただしRSI={rsi}と短期的な過熱サインが点灯中。高値掴みには注意してください。"
+
+    if candle_data and candle_data.get('is_trap'):
+        comment += f" （⚠️上ヒゲ率{candle_data.get('upper_wick_ratio',0)*100:.1f}%：高値警戒）"
+
+    if rr_data:
+        comment += f" [🛡️推奨SL: {rr_data['sl_price']:,}円 (-{rr_data['risk_pct']}%) / 🎯目標TP: {rr_data['tp_price']:,}円 / R/R 1:{rr_data['rr_ratio']}]"
             
     return comment
 
@@ -145,6 +152,17 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
             if prev['MA25'] >= prev['MA75'] and latest['MA25'] < latest['MA75']:
                 signals.append("⚠️ デッドクロス発生")
 
+            # ローソク足トラップ解析とリスクリワード算出
+            candle_analysis = analyze_candlestick(df)
+            rr_data = calculate_risk_reward(df)
+
+            if candle_analysis.get('is_trap'):
+                trap_label = candle_analysis['trap_reasons'][0] if candle_analysis['trap_reasons'] else "上ヒゲ警戒"
+                signals.append(f"⚠️ [罠警戒] {trap_label}")
+
+            if rr_data:
+                signals.append(f"⚖️ R/R 1:{rr_data['rr_ratio']}")
+
             # 💡 【追加】本物のAI (IPPO) による分析を実行
             if api_key:
                 tech_data = {
@@ -153,11 +171,18 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
                     'シグナル': ", ".join(signals) if signals else "特になし",
                     '出来高': vol_text
                 }
+                if rr_data:
+                    tech_data['推奨損切り(SL)'] = f"{rr_data['sl_price']:,}円 (-{rr_data['risk_pct']}%)"
+                    tech_data['目標利確(TP)'] = f"{rr_data['tp_price']:,}円 (+{rr_data['reward_pct']}%)"
+                    tech_data['リスクリワード比'] = f"1 : {rr_data['rr_ratio']} ({rr_data['rr_eval']})"
+                if candle_analysis:
+                    tech_data['ローソク足特性'] = f"上ヒゲ率 {candle_analysis['upper_wick_ratio']*100:.1f}%"
+
                 news_list = fetch_recent_news(code, limit=3) # 最新ニュースを3件取得
                 ai_comment = get_ai_analysis(code, price, tech_data, news_list, api_key)
             else:
                 # APIキーがない場合は従来の定型文を使う
-                ai_comment = generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio)
+                ai_comment = generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio, rr_data=rr_data, candle_data=candle_analysis)
 
             df_clean = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(120)
             history_data = []
@@ -177,7 +202,8 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
             return {
                 "code": code, "name": name, "price": price, "price_diff": price_diff,
                 "rsi": rsi, "rsi_trend": rsi_trend, "vol_text": vol_text, "position": position, "signals": signals,
-                "history_data": history_data, "ai_comment": ai_comment, "error": False
+                "history_data": history_data, "ai_comment": ai_comment, "error": False,
+                "risk_reward": rr_data, "candlestick": candle_analysis
             }
         except Exception as e:
             if attempt < max_retries - 1:

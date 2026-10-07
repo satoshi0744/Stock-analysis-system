@@ -157,7 +157,9 @@ def main():
         for item in scan_a:
             # 一推し銘柄には🌟マークをつける
             star = "🌟(一推し) " if item.get("is_top_pick") else ""
-            body += f"・{star}{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円)\n"
+            rr = item.get("risk_reward")
+            rr_str = f" [SL: {rr['sl_price']:,}円(-{rr['risk_pct']}%) / TP: {rr['tp_price']:,}円 / R/R 1:{rr['rr_ratio']}]" if rr else ""
+            body += f"・{star}{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円){rr_str}\n"
     else:
         body += "・本日の鉄板条件クリア銘柄なし（休むも相場です）\n"
     body += "\n"
@@ -168,7 +170,9 @@ def main():
         for item in scan_b[:5]:
             signals_str = " / ".join([s for s in item.get('signals', []) if '出来高' not in s])
             sig_text = f" ({signals_str})" if signals_str else ""
-            body += f"・{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円{sig_text})\n"
+            rr = item.get("risk_reward")
+            rr_str = f" [SL: {rr['sl_price']:,}円 / R/R 1:{rr['rr_ratio']}]" if rr else ""
+            body += f"・{item['code']} {item['name']} (出来高 {item['vol_ratio']}倍 / 終値 {item['price']:,}円{sig_text}){rr_str}\n"
         body += "\n"
         
     body += "【📋 監視銘柄の状況】\n"
@@ -180,7 +184,9 @@ def main():
                 diff = item.get("price_diff", 0)
                 diff_str = f"+{diff:,}" if diff > 0 else (f"{diff:,}" if diff < 0 else "±0")
                 rsi = item.get('rsi', '-')
-                body += f"・{item['code']} {item['name']}: {item['price']:,}円 ({diff_str}円) ({item['position']} / RSI: {rsi})\n"
+                rr = item.get("risk_reward")
+                rr_str = f" [SL: {rr['sl_price']:,}円 / R/R 1:{rr['rr_ratio']}]" if rr else ""
+                body += f"・{item['code']} {item['name']}: {item['price']:,}円 ({diff_str}円) ({item['position']} / RSI: {rsi}){rr_str}\n"
     else:
         body += "・データなし\n"
     body += "\n"

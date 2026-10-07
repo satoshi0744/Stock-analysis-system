@@ -9,6 +9,7 @@ import json
 import urllib.parse
 import feedparser
 import requests
+from risk_reward import analyze_candlestick, calculate_risk_reward
 
 JST = timezone(timedelta(hours=9))
 
@@ -95,7 +96,7 @@ def fetch_macro_data():
     return macro_info
 
 # 🚨 IPPOによる大胆予測（A群トップ銘柄専用）
-def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key):
+def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key, rr_data=None, candle_data=None):
     if not api_key: return ""
     
     news_list = fetch_recent_news(ticker_code)
@@ -106,16 +107,28 @@ def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key):
     macro_text = "\n".join([f"・{k}: {v}" for k, v in macro_data.items()])
     macro_news_text = "\n".join([f"・{n['title']}" for n in macro_news_list]) if macro_news_list else "特になし"
     
+    risk_info_lines = []
+    if rr_data:
+        risk_info_lines.append(f"推奨損切りライン(SL): {rr_data.get('sl_price', 0):,}円 (-{rr_data.get('risk_pct', 0)}% / {rr_data.get('sl_type', '')})")
+        risk_info_lines.append(f"目標利確価格(TP): {rr_data.get('tp_price', 0):,}円 (+{rr_data.get('reward_pct', 0)}% / {rr_data.get('tp_type', '')})")
+        risk_info_lines.append(f"リスクリワード比: 1 : {rr_data.get('rr_ratio', 0)} ({rr_data.get('rr_eval', '')})")
+    if candle_data:
+        shape_eval = "真の陽線ブレイク" if candle_data.get('is_pure_bullish') else "陰線/押し戻し懸念"
+        risk_info_lines.append(f"ローソク足形状: 上ヒゲ率 {candle_data.get('upper_wick_ratio', 0)*100:.1f}% ({shape_eval})")
+    risk_text = "\n".join([f"・{line}" for line in risk_info_lines]) if risk_info_lines else "特になし"
+
     prompt = f"""
 対象銘柄:{ticker_code} {name} / 現在値:{price}円
 個別テクニカルデータ:{tech_data}
+【重要】リスク管理・損益比率データ:
+{risk_text}
 直近ニュース（個別）:{news_text}
 現在の世界マクロ経済データ:{macro_text}
 【重要】現在の世界・国内トップニュース:{macro_news_text}
 
 あなたはプロのAIストラテジスト「IPPO」です。挨拶不要。
 この銘柄は本日のシステム分析で最も勢いのある「一推し銘柄」として選出されました。
-提供された「事実」と「マクロ経済ニュース」を統合し、以下の構成ルールに厳密に従ってレポートを出力してください。
+提供された「事実」「リスク管理データ」「マクロ経済ニュース」を統合し、以下の構成ルールに厳密に従ってレポートを出力してください。
 
 ※重要: ```html などのマークダウン記法は絶対に避け、純粋なHTMLタグとテキストのみを出力してください。
 
@@ -123,6 +136,7 @@ def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key):
 「<h4>🚀 IPPOの渾身の大大胆予測シナリオ</h4>」という小見出しをつけ、投資ストラテジストとしてのあなたの大大胆予測（数日〜数週間の動き）を熱く語ってください。
 - 【絶対遵守】ダラダラとした長文を避け、必ず行頭に「・」を置いた箇条書き形式で出力すること。
 - チャートの形状、個別ニュース、そして【マクロ経済データや世界トップニュース】がこの銘柄にどう影響するかをロジカルかつドラマチックに説明すること。
+- プロの投資判断として、【推奨損切りライン（SL）と目標利確価格（TP）、リスクリワード比】に必ず言及し、シナリオが崩れた場合の撤退基準を含めた論理的な売買シナリオを提示すること。
 """
     url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -140,7 +154,7 @@ def get_ai_bold_prediction(ticker_code, name, price, tech_data, api_key):
     except Exception:
         return "【通信エラー】予測を取得できませんでした"
 
-def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_breakout):
+def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_breakout, rr_data=None, candle_data=None):
     comment = ""
     if group == "A" and is_breakout:
         comment += f"【🚀上昇加速型】過去20日間の高値を明確にブレイクアウト！出来高も{vol_ratio}倍と大口の買いが明白です。過去の統計上、この条件達成時の5日後勝率は「51.4%（平均+0.71%）」であり、明日の寄り付きでの順張りエントリーに最も高い優位性が確認されています。"
@@ -148,12 +162,15 @@ def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_brea
         comment += f"【本命シグナル】出来高急増（{vol_ratio}倍）を伴い前日高値を抜けました。200日線上の強い上昇トレンドに乗る形ですが、直近高値の更新（完全なブレイクアウト）には至っていません。"
     else:
         comment += f"【動意確認】出来高は{vol_ratio}倍と資金流入が見られますが、"
-        if not is_yosen:
+        if candle_data and candle_data.get("is_trap"):
+            trap_msg = "、".join(candle_data.get("trap_reasons", []))
+            comment += f"【⚠️ダマシ警戒】{trap_msg}のため本命から除外されました。"
+        elif not is_yosen:
             comment += "前日高値を抜けきれず上値の重さが残ります。"
         elif not is_above_ma200:
             comment += "200日線の下にあり、長期トレンドは依然として下落・調整局面です。"
         else:
-            comment += "地合い等のフィルターにより本命からは外れました。"
+            comment += "地合いやリスクリワード比等のフィルターにより本命からは外れました。"
     
     if type(rsi) != str:
         if rsi >= 75:
@@ -162,6 +179,10 @@ def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_brea
             comment += f" RSIは{rsi}と売られすぎ水準にあり、自律反発に優位性が見込めます。"
         elif group == "A" and 40 <= rsi <= 70:
             comment += f" RSIも{rsi}と過熱感はなく、ここから上値余地が十分に狙える理想的な状態です。"
+
+    if rr_data:
+        comment += f" [🛡️推奨SL: {rr_data['sl_price']:,}円 (-{rr_data['risk_pct']}%) / 🎯目標TP: {rr_data['tp_price']:,}円 (+{rr_data['reward_pct']}%) / R/R比 1:{rr_data['rr_ratio']}]"
+
     return comment
 
 def check_market_trend(start_str, end_str):
@@ -243,14 +264,28 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
                 is_above_ma200 = price > ma200
                 is_breakout = latest['Close'] > latest['High_20'] if pd.notna(latest['High_20']) else False
                 
+                # ローソク足トラップ解析とリスクリワード算出
+                candle_analysis = analyze_candlestick(df)
+                rr_data = calculate_risk_reward(df)
+
                 signals = [f"🔥 出来高 ({round(vol_ratio, 1)}倍)"]
                 if is_breakout:
-                    signals.append("👑 [🚀 上昇加速型] 20日高値更新")
+                    if not candle_analysis.get('is_trap'):
+                        signals.append("👑 [🚀 上昇加速型] 20日高値更新")
+                    else:
+                        signals.append("⚠️ [高値更新・上ヒゲ警戒]")
                 elif is_yosen:
                     signals.append("📈 前日高値抜け")
                 
                 if is_above_ma200:
                     signals.append("🟩 200日線上")
+
+                if candle_analysis.get('is_trap'):
+                    trap_label = candle_analysis['trap_reasons'][0] if candle_analysis['trap_reasons'] else "上ヒゲ警戒"
+                    signals.append(f"⚠️ [罠警戒] {trap_label}")
+
+                if rr_data:
+                    signals.append(f"⚖️ R/R 1:{rr_data['rr_ratio']}")
 
                 df_clean = df.dropna(subset=['Open', 'High', 'Low', 'Close']).tail(120)
                 history_data = []
@@ -290,15 +325,23 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
                 if rsi <= 30 and latest['Close'] < latest['MA25'] * 0.95 and latest['Close'] > latest['Open']:
                     signals.append("🔄 [底打ち確認型] RSI低位・MA25乖離")
 
-                group = "A" if (is_good_market and is_yosen and is_above_ma200 and is_breakout) or ("底打ち" in str(signals)) else "B"
+                # A群判定: 地合い・前日高値超え・200日線上・20日高値更新に加え、
+                # 当日陽線(is_pure_bullish)かつダマシ・トラップなし(not is_trap)かつR/R比1.2以上を必須化
+                is_pure_bull = candle_analysis.get('is_pure_bullish', False)
+                not_trap = not candle_analysis.get('is_trap', True)
+                good_rr = (rr_data is None or rr_data.get('rr_ratio', 0) >= 1.2)
                 
-                ai_comment = generate_ai_comment(group, round(float(vol_ratio), 1), is_yosen, is_above_ma200, rsi, is_breakout)
+                is_breakout_a = (is_good_market and is_yosen and is_above_ma200 and is_breakout and is_pure_bull and not_trap and good_rr)
+                group = "A" if is_breakout_a or ("底打ち" in str(signals)) else "B"
+                
+                ai_comment = generate_ai_comment(group, round(float(vol_ratio), 1), is_yosen, is_above_ma200, rsi, is_breakout, rr_data=rr_data, candle_data=candle_analysis)
                 
                 return {"group": group, "data": {
                     "code": code, "name": name, "price": price, "vol_ratio": round(float(vol_ratio), 1),
                     "price_diff": price_diff, "signals": signals, "history_data": history_data,
                     "position": "200日線上" if is_above_ma200 else "200日線下",
-                    "rsi": rsi, "rsi_trend": rsi_trend, "vol_text": vol_text, "ai_comment": ai_comment
+                    "rsi": rsi, "rsi_trend": rsi_trend, "vol_text": vol_text, "ai_comment": ai_comment,
+                    "risk_reward": rr_data, "candlestick": candle_analysis
                 }}
             return None
         except Exception:
@@ -340,7 +383,10 @@ def scan_b_type(target_date_str=None, api_key=""):
             top_pick = scan_a[0]
             top_pick['is_top_pick'] = True
             tech_data = f"RSI:{top_pick.get('rsi')}, 出来高:{top_pick.get('vol_text')}, シグナル:{','.join(top_pick.get('signals', []))}"
-            bold_comment = get_ai_bold_prediction(top_pick['code'], top_pick['name'], top_pick['price'], tech_data, api_key)
+            bold_comment = get_ai_bold_prediction(
+                top_pick['code'], top_pick['name'], top_pick['price'], tech_data, api_key,
+                rr_data=top_pick.get('risk_reward'), candle_data=top_pick.get('candlestick')
+            )
             top_pick['bold_prediction'] = bold_comment
 
     return {

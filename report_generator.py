@@ -171,9 +171,13 @@ def generate_files(watch_data, scan_data_dict, prev_report=None, data_date=None)
         .action-link {{ display: inline-block; padding: 6px 12px; margin-top: 12px; margin-right: 8px; background-color: #1a237e; color: #e8eaf6; text-decoration: none; border-radius: 4px; font-size: 0.85rem; font-weight: bold; border: 1px solid #3949ab; }}
         .b-group-box {{ background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 20px; }}
         .b-group-item {{ border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px; }}
-        .b-group-item:last-child {{ border-bottom: none; margin-bottom: 0; padding-bottom: 0; }}
         .ai-comment-box {{ background: linear-gradient(145deg, #1e253c, #151a2a); border-left: 4px solid #b388ff; border-radius: 6px; padding: 12px 15px; margin-top: 15px; font-size: 0.9rem; color: #e8eaf6; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }}
         .ai-comment-header {{ font-weight: bold; color: #b388ff; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }}
+        .risk-box {{ background: linear-gradient(145deg, #161c2e, #111522); border: 1px solid #283593; border-radius: 6px; padding: 12px 14px; margin-top: 12px; margin-bottom: 10px; }}
+        .risk-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }}
+        .risk-grid {{ display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.88rem; }}
+        .risk-item {{ display: flex; align-items: baseline; gap: 6px; }}
+        .badge-rr {{ padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }}
     </style>
 </head>
 <body>
@@ -227,8 +231,33 @@ def generate_files(watch_data, scan_data_dict, prev_report=None, data_date=None)
                     elif "[PULLBACK]" in sig: badge_cls = "badge-pullback"
                     elif "出来高" in sig: badge_cls = "badge-volume"
                     html += f'<span class="badge {badge_cls}">{sig}</span>'
-                html += '</div>'
-            
+            rr = item.get("risk_reward")
+            if rr:
+                html += f"""
+                <div class="risk-box">
+                    <div class="risk-header">
+                        <span style="font-weight:bold; color:#9fa8da;">⚖️ リスク管理・シナリオ設計</span>
+                        <span class="badge-rr" style="background-color: {rr['rr_color']}22; color: {rr['rr_color']}; border: 1px solid {rr['rr_color']};">
+                            R/R比 1 : {rr['rr_ratio']} ({rr['rr_eval']})
+                        </span>
+                    </div>
+                    <div class="risk-grid">
+                        <div class="risk-item">
+                            <span style="color:#aaa;">🛡️ 損切り(SL):</span>
+                            <strong style="color:#ff8a80;">{rr['sl_price']:,}円</strong>
+                            <span style="color:#ff8a80; font-size:0.8rem;">(-{rr['risk_pct']}%)</span>
+                            <span style="color:#777; font-size:0.75rem;">({rr['sl_type']})</span>
+                        </div>
+                        <div class="risk-item">
+                            <span style="color:#aaa;">🎯 目標利確(TP):</span>
+                            <strong style="color:#69f0ae;">{rr['tp_price']:,}円</strong>
+                            <span style="color:#69f0ae; font-size:0.8rem;">(+{rr['reward_pct']}%)</span>
+                            <span style="color:#777; font-size:0.75rem;">({rr['tp_type']})</span>
+                        </div>
+                    </div>
+                </div>
+                """
+
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
             ai_comment = item.get("ai_comment", "")
@@ -253,9 +282,11 @@ def generate_files(watch_data, scan_data_dict, prev_report=None, data_date=None)
             diff = item.get("price_diff", 0)
             diff_str = f"+{diff}" if diff > 0 else str(diff)
             sigs = " ".join([f"[{s}]" for s in item.get("signals", [])])
+            rr = item.get("risk_reward")
+            rr_str = f'<span style="color:#9fa8da; font-size:0.8rem; margin-left:8px;">(SL: {rr["sl_price"]:,}円 / R/R 1:{rr["rr_ratio"]})</span>' if rr else ""
             html += f"""
                 <div class="b-group-item">
-                    <div style="font-weight: bold; color: #bbb;">{item["code"]} {company_name} <span style="font-weight:normal; font-size:0.9rem; color:#888;">({item["price"]:,}円 / {diff_str}円)</span></div>
+                    <div style="font-weight: bold; color: #bbb;">{item["code"]} {company_name} <span style="font-weight:normal; font-size:0.9rem; color:#888;">({item["price"]:,}円 / {diff_str}円)</span>{rr_str}</div>
                     <div style="font-size: 0.85rem; color: #777; margin-top:3px;">{sigs}</div>
                 </div>
             """
@@ -341,6 +372,33 @@ def generate_files(watch_data, scan_data_dict, prev_report=None, data_date=None)
                     elif "出来高" in sig: badge_cls = "badge-volume"
                     html += f'<span class="badge {badge_cls}">{sig}</span>'
                 html += '</div>'
+
+            rr = item.get("risk_reward")
+            if rr:
+                html += f"""
+                <div class="risk-box">
+                    <div class="risk-header">
+                        <span style="font-weight:bold; color:#9fa8da;">⚖️ リスク管理・シナリオ設計</span>
+                        <span class="badge-rr" style="background-color: {rr['rr_color']}22; color: {rr['rr_color']}; border: 1px solid {rr['rr_color']};">
+                            R/R比 1 : {rr['rr_ratio']} ({rr['rr_eval']})
+                        </span>
+                    </div>
+                    <div class="risk-grid">
+                        <div class="risk-item">
+                            <span style="color:#aaa;">🛡️ 損切り(SL):</span>
+                            <strong style="color:#ff8a80;">{rr['sl_price']:,}円</strong>
+                            <span style="color:#ff8a80; font-size:0.8rem;">(-{rr['risk_pct']}%)</span>
+                            <span style="color:#777; font-size:0.75rem;">({rr['sl_type']})</span>
+                        </div>
+                        <div class="risk-item">
+                            <span style="color:#aaa;">🎯 目標利確(TP):</span>
+                            <strong style="color:#69f0ae;">{rr['tp_price']:,}円</strong>
+                            <span style="color:#69f0ae; font-size:0.8rem;">(+{rr['reward_pct']}%)</span>
+                            <span style="color:#777; font-size:0.75rem;">({rr['tp_type']})</span>
+                        </div>
+                    </div>
+                </div>
+                """
             
             html += f'<div><a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T" target="_blank" class="action-link">📊 株価詳細</a> <a href="https://finance.yahoo.co.jp/quote/{item["code"]}.T/news" target="_blank" class="action-link">📰 ニュース</a></div>'
 
@@ -367,6 +425,9 @@ def generate_files(watch_data, scan_data_dict, prev_report=None, data_date=None)
             <dt>RSI（相対力指数）</dt><dd>株価の過熱感を指数化したもの。70％以上買われすぎ、30％以下売られすぎ。</dd>
             <dt>200日線（移動平均線）</dt><dd>過去200営業日（約1年）の平均。長期トレンドの最重要ライン。</dd>
             <dt>出来高急増（動意）</dt><dd>大口資金が流入し、新たなテーマが始まる初動サイン。</dd>
+            <dt>リスクリワード比（R/R比）</dt><dd>想定利益（リワード）と想定損失（リスク）の比率。1:2以上が理想的であり、割に合わないトレードを機械的に排除します。</dd>
+            <dt>推奨損切りライン（SL）</dt><dd>直近スイング安値などを基にした「シナリオ否定ライン」。ここを割ったら迷わず撤退する基準価格です。</dd>
+            <dt>ダマシ・トラップ回避</dt><dd>ブレイクアウト後に大口の利確や売りに押されて長い上ヒゲを残した「高値掴み罠」を自動検知して除外します。</dd>
         </dl>
     </div>
 
