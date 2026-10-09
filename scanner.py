@@ -356,7 +356,12 @@ def scan_b_type(target_date_str=None, api_key=""):
     if not universe:
         return {"market_info": {"is_good": False, "text": "銘柄リスト読込エラー", "nikkei_data": {}}, "scan_a": [], "scan_b": []}
     
-    end = datetime.now(JST)
+    if target_date_str:
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').replace(tzinfo=JST)
+        end = target_date + timedelta(hours=23, minutes=59)
+    else:
+        end = datetime.now(JST)
+
     start_str = (end - timedelta(days=500)).strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     

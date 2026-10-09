@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import json
 import smtplib
 import yfinance as yf
@@ -12,6 +13,12 @@ from report_generator import generate_files, load_previous_report
 
 # 日本時間のタイムゾーン設定
 JST = timezone(timedelta(hours=9))
+
+# Windows等のcp932環境での絵文字出力エラー防止
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
 # 🚨【新規追加】APIキーを環境変数またはテキストファイルから読み込む
 def load_api_key():
@@ -65,60 +72,53 @@ def get_last_processed_data_date():
             continue
     return None
 
-def get_expected_market_date():
-    """現在時刻（JST）から期待される最新の市場営業日（YYYY-MM-DD）を算出する。
-    平日16:00以降なら当日。深夜・早朝（遅延実行時）なら前営業日。
-    土日は直前の金曜日に巻き戻す。
-    """
-    now = datetime.now(JST)
-    if now.hour >= 16:
-        target = now.date()
-    else:
-        target = now.date() - timedelta(days=1)
-    
-    while target.weekday() >= 5:  # 5=土, 6=日
-        target -= timedelta(days=1)
-    return target.strftime('%Y-%m-%d')
-
-def check_market_updated():
-    """東証の最新株価データが取得可能か、および前回処理済みデータとの重複がないかを検証する。
-    Returns:
-        (is_valid, reason, latest_market_date)
-    """
-    expected_date = get_expected_market_date()
-    last_processed_date = get_last_processed_data_date()
-
+def get_unprocessed_market_dates():
+    """yfinanceの7203.Tから直近営業日リストを取得し、前回処理済み日より後の未処理日付リストを返す。"""
+    last_processed = get_last_processed_data_date()
     try:
         ticker = yf.Ticker("7203.T")
-        df = ticker.history(period="5d")
+        df = ticker.history(period="15d")
         if df.empty:
-            return False, "データプロバイダ（yfinance）からの取得失敗", None
+            return [], "データプロバイダ（yfinance）からの取得失敗", None
         
         df = df.dropna(subset=['Close'])
         if df.empty:
-            return False, "有効データなし", None
+            return [], "有効データなし", None
         
         df.index = df.index.tz_localize(None)
-        latest_market_date = df.index[-1].strftime('%Y-%m-%d')
+        all_dates = [idx.strftime('%Y-%m-%d') for idx in df.index]
+        
+        if not all_dates:
+            return [], "営業日データなし", None
 
-        # 1. 重複チェック（前回のレポートと全く同じデータ日の場合はスキップ）
-        if last_processed_date and latest_market_date == last_processed_date and latest_market_date != expected_date:
-            return False, f"最新データ（{latest_market_date}）は既に前回レポート済みです。新データ未反映のためスキップします。", latest_market_date
+        latest_market_date = all_dates[-1]
 
-        # 2. 最新性が期待営業日に達しているかチェック（休場日・未反映判定）
-        if latest_market_date != expected_date:
-            return False, f"期待される営業日（{expected_date}）のデータが未反映、または休場日のため（最新取得日: {latest_market_date}）。", latest_market_date
+        # 履歴が一切ない場合は最新日のみ
+        if not last_processed:
+            return [latest_market_date], f"初回実行（最新日: {latest_market_date}）", latest_market_date
 
-        return True, f"最新データ（{latest_market_date}）取得完了", latest_market_date
+        # 前回処理済み日付よりも新しい営業日データを抽出
+        unprocessed = [d for d in all_dates if d > last_processed]
+
+        if not unprocessed:
+            return [], f"最新データ（{latest_market_date}）は既に前回レポート済みです（新データ未反映または休場日）。", latest_market_date
+
+        return unprocessed, f"未処理の営業日データ {len(unprocessed)} 件を検出: {', '.join(unprocessed)}", latest_market_date
     except Exception as e:
-        return False, f"株価取得エラー: {str(e)}", None
+        return [], f"株価取得エラー: {str(e)}", None
 
 def main():
     today_str = datetime.now(JST).strftime('%Y-%m-%d')
+    gemini_api_key = load_api_key()
     
-    is_updated, reason, latest_date = check_market_updated()
+    force_run = os.environ.get("FORCE_RUN", "").lower() in ["true", "1"] or ("--force" in sys.argv)
     
-    if not is_updated:
+    unprocessed_dates, reason, latest_date = get_unprocessed_market_dates()
+    
+    if force_run and not unprocessed_dates and latest_date:
+        print(f"⚡ [FORCE] 強制実行フラグが有効です。最新営業日（{latest_date}）でレポート生成・メール送信を実行します。")
+        unprocessed_dates = [latest_date]
+    elif not unprocessed_dates:
         subject = f"🚨【休場・未更新】株価データ処理スキップ [{today_str}]"
         body = f"本日（{today_str}）の株価データ分析・配信を安全にスキップしました。\n\n"
         body += f"【スキップ理由】\n{reason}\n\n"
@@ -130,28 +130,43 @@ def main():
         send_email(body, subject=subject)
         sys.exit(0)
 
-    print(f"🚀 [START] 株価分析システム 本番バッチ処理を開始します... (データ基準日: {latest_date})")
+    print(f"🚀 [START] 株価分析システム 本番バッチ処理を開始します...")
+    print(f"📋 処理対象の未処理営業日: {unprocessed_dates}")
+
+    # 1. 過去の未処理営業日がある場合は順次バックフィル（履歴JSONのみ生成）
+    if len(unprocessed_dates) > 1:
+        for past_date in unprocessed_dates[:-1]:
+            print(f"\n📦 [Backfill] 過去日 {past_date} のデータ積み上げ処理中...")
+            past_watch = analyze_watch_tickers(target_date_str=past_date)
+            past_scan = scan_b_type(target_date_str=past_date, api_key="") # 過去分はAPI制限回避のため定型文
+            generate_files(past_watch, past_scan, data_date=past_date)
+            print(f"✅ [Backfill] {past_date} の履歴JSON保存完了")
+            time.sleep(2)
+
+    # 2. 最新営業日の本番分析を実行
+    target_latest_date = unprocessed_dates[-1]
+    print(f"\n🌟 [Latest] 最新営業日 {target_latest_date} の本番分析を開始...")
     
     print("\n🔍 監視銘柄の分析を開始...")
-    watch_results = analyze_watch_tickers()
+    watch_results = analyze_watch_tickers(target_date_str=target_latest_date)
     print(f"✅ 監視銘柄の分析完了: {len(watch_results)}銘柄")
 
     print("\n🔍 市場全体のスキャンを開始...")
-    gemini_api_key = load_api_key()
-    scan_results = scan_b_type(api_key=gemini_api_key)
+    scan_results = scan_b_type(target_date_str=target_latest_date, api_key=gemini_api_key)
     print(f"✅ スキャン完了: A群 {len(scan_results['scan_a'])}銘柄 / B群 {len(scan_results['scan_b'])}銘柄")
 
     print("\n📊 ダッシュボードの生成を開始...")
     os.makedirs("public", exist_ok=True)
     prev_report = load_previous_report()
-    generate_files(watch_results, scan_results, prev_report=prev_report, data_date=latest_date)
-    print("✅ ダッシュボード生成完了: public/index.html")
+    generate_files(watch_results, scan_results, prev_report=prev_report, data_date=target_latest_date)
+    print(f"✅ ダッシュボード生成完了: public/index.html (データ基準日: {target_latest_date})")
     
     print("\n📧 メール配信準備中...")
     market_info = scan_results.get("market_info", {})
     scan_a = scan_results.get("scan_a", [])
     
-    body = f"【📈 本日の相場環境】\n{market_info.get('text', '')}\n\n"
+    backfill_note = f"（※未反映だった過去営業日 {', '.join(unprocessed_dates[:-1])} のデータも正常に蓄積・保存完了しました）\n\n" if len(unprocessed_dates) > 1 else ""
+    body = f"【📈 本日の相場環境 (データ基準日: {target_latest_date})】\n{market_info.get('text', '')}\n\n{backfill_note}"
     body += "【👑 本日の条件達成銘柄】\n"
     if scan_a:
         for item in scan_a:
@@ -197,7 +212,8 @@ def main():
     pages_url = f"https://{username}.github.io/{repo_name}/"
     
     body += f"ダッシュボードはこちら: {pages_url}\n\n"
-    send_email(body)
+    subject = f"投資戦略レポート [{target_latest_date} 終値]"
+    send_email(body, subject=subject)
     
     print("\n🎉 [SUCCESS] すべての処理が正常に完了し、メール送信を予約しました！")
 
