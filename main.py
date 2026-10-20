@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from scanner import scan_b_type
 from watcher import analyze_watch_tickers
 from report_generator import generate_files, load_previous_report
-from market_calendar import get_trading_dates, get_yfinance_available_dates
+from market_calendar import get_trading_dates, get_available_price_dates
 
 # 日本時間のタイムゾーン設定
 JST = timezone(timedelta(hours=9))
@@ -117,9 +117,9 @@ def get_unprocessed_market_dates():
                             f"本日は休場日です。")
         return result
 
-    # yfinance に日足が入っている日付だけを、古い順に「途切れなく」処理する。
-    # 途中の日が未反映なのに後の日を処理すると、前回処理日が進んでその日が永久に抜けるため。
-    available = get_yfinance_available_dates()
+    # ローカル保存＋差分積み重ね（Yahoo!ファイナンス日本 / yfinance）で取得可能な日付を古い順に処理する。
+    # 遅延で日をまたいで翌日（次の日の開場前など）に動作した場合でも、前日分が確定していればそのまま配信する。
+    available = get_available_price_dates()
     ready = []
     for d in unprocessed:
         if d in available:
@@ -217,8 +217,9 @@ def main():
     market_info = scan_results.get("market_info", {})
     scan_a = scan_results.get("scan_a", [])
     
+    delay_note = f"（※実行遅延により日をまたいでの配信となりましたが、{target_latest_date} 終値確定データを正常に分析・お届けします）\n\n" if today_str > target_latest_date else ""
     backfill_note = f"（※未反映だった過去営業日 {', '.join(unprocessed_dates[:-1])} のデータも正常に蓄積・保存完了しました）\n\n" if len(unprocessed_dates) > 1 else ""
-    body = f"【📈 本日の相場環境 (データ基準日: {target_latest_date})】\n{market_info.get('text', '')}\n\n{backfill_note}"
+    body = f"{delay_note}【📈 本日の相場環境 (データ基準日: {target_latest_date})】\n{market_info.get('text', '')}\n\n{backfill_note}"
     body += "【👑 本日の条件達成銘柄】\n"
     if scan_a:
         for item in scan_a:

@@ -10,6 +10,7 @@ import urllib.parse
 import feedparser
 import requests
 from risk_reward import analyze_candlestick, calculate_risk_reward
+from price_store import get_stock_df
 
 JST = timezone(timedelta(hours=9))
 
@@ -187,8 +188,7 @@ def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_brea
 
 def check_market_trend(start_str, end_str, expected_date=None):
     try:
-        ticker = yf.Ticker("^N225")
-        df = ticker.history(start=start_str, end=end_str)
+        df = get_stock_df("^N225", target_date_str=expected_date)
         if df.empty:
             return False, "データ取得失敗", {}
         
@@ -235,16 +235,13 @@ def process_ticker(code, name, start_str, end_str, is_good_market, expected_date
     base_wait = 2
     for attempt in range(max_retries):
         try:
-            ticker = yf.Ticker(f"{code}.T")
-            df = ticker.history(start=start_str, end=end_str)
+            df = get_stock_df(code, target_date_str=expected_date)
             if df.empty:
                 return None
             
             df = df.dropna(subset=['Close'])
             if len(df) < 200:
                 return None
-            
-            df.index = df.index.tz_localize(None)
             # 日付照合ガード: 最終行が対象日でなければ採用しない
             if expected_date and df.index[-1].strftime('%Y-%m-%d') != expected_date:
                 return None

@@ -7,7 +7,9 @@ import os
 # AI連携モジュールのインポート（GitHub上にこれらのファイルが必要です）
 from ai_analyzer import get_ai_analysis
 from news_fetcher import fetch_recent_news
+import json
 from risk_reward import analyze_candlestick, calculate_risk_reward
+from price_store import get_stock_df
 
 JST = timezone(timedelta(hours=9))
 
@@ -16,6 +18,20 @@ WATCH_TICKERS = {
     "6861": "キーエンス", "8035": "東京エレクトロン", "9432": "NTT", "8058": "三菱商事", 
     "7974": "任天堂", "6146": "ディスコ", "4063": "信越化学工業", "8411": "みずほFg"
 }
+
+def load_watch_tickers():
+    """watchlist.json があれば優先して読み込み、なければデフォルトの WATCH_TICKERS を返す。"""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    wl_path = os.path.join(base_dir, "watchlist.json")
+    if os.path.exists(wl_path):
+        try:
+            with open(wl_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and data:
+                return data
+        except Exception:
+            pass
+    return WATCH_TICKERS
 
 def generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio, rr_data=None, candle_data=None):
     """【APIキー未設定時のフォールバック用】従来の定型文エンジン"""
@@ -56,8 +72,8 @@ def process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=
 
     for attempt in range(max_retries):
         try:
-            ticker = yf.Ticker(f"{code}.T")
-            df = ticker.history(start=start_str, end=end_str)
+            # 初回登録時のみ500日取得して保存、以降は差分（その日のデータ）のみ積み重ねて取得
+            df = get_stock_df(code, target_date_str=expected_date)
             
             if df.empty:
                 return {"code": code, "name": name, "error": True, "error_msg": "データ取得失敗"}
@@ -67,8 +83,6 @@ def process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=
             
             if len(df) < 200:
                 return {"code": code, "name": name, "error": True, "error_msg": "データ不足（新規上場など）"}
-                
-            df.index = df.index.tz_localize(None)
 
             # 日付照合ガード: 最終行が対象日でなければ、古いデータを当日扱いしない
             if expected_date and df.index[-1].strftime('%Y-%m-%d') != expected_date:
@@ -233,13 +247,14 @@ def analyze_watch_tickers(target_date_str=None):
     api_key = os.environ.get("GEMINI_API_KEY")
 
     # 💡 【重要変更】API制限(15RPM)を回避するため、並列処理をやめて直列処理＋ウェイト(4秒)に変更
-    for code, name in WATCH_TICKERS.items():
+    tickers_map = load_watch_tickers()
+    for code, name in tickers_map.items():
         res = process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=target_date_str)
         results.append(res)
         if api_key:
             time.sleep(4) # AIに負荷をかけないための安全装置
             
-    order = list(WATCH_TICKERS.keys())
+    order = list(tickers_map.keys())
     results.sort(key=lambda x: order.index(x['code']))
             
     return results

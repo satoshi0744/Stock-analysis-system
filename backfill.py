@@ -5,6 +5,7 @@ import yfinance as yf
 from datetime import datetime, timedelta, timezone
 from watcher import analyze_watch_tickers
 from scanner import scan_b_type
+from price_store import get_stock_df
 
 JST = timezone(timedelta(hours=9))
 HISTORY_DIR = "public/history"
@@ -12,14 +13,9 @@ HISTORY_DIR = "public/history"
 def get_trading_days(days_back):
     """日経平均(^N225)を基準に、過去の『実際の営業日』リストを取得する（個別銘柄には依存しない）"""
     end = datetime.now(JST)
-    start = end - timedelta(days=days_back * 2) # 祝日を加味して余裕を持って取得
-    ticker = yf.Ticker("^N225")
-    df = ticker.history(start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'))
-    
+    df = get_stock_df("^N225")
     if df.empty:
         return []
-        
-    df.index = df.index.tz_localize(None)
     dates = df.index.strftime('%Y-%m-%d').tolist()
     
     # 当日（今日）のデータは、日次の main.py に任せるため除外

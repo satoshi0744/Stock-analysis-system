@@ -4,14 +4,17 @@
 設計方針:
 - 個別銘柄（監視銘柄など変更されうるもの）には一切依存しない。
 - 一次ソース: Yahoo!ファイナンス（日本）の日経平均株価（998407.O）時系列ページ。
-- 予備ソース: yfinance の ^N225（日経平均）。一次ソースが取得できない場合のみ使用。
+- 予備ソース: ローカル保存済み日経平均データ + yfinance の ^N225（日経平均）。
 - 日付はすべて日本標準時（JST）で扱う。
+- 大引け確定（15:45 JST）より前の実行（深夜〜翌日開場前〜取引時間中）では、
+  当日はまだ未確定として除外し、直近の確定営業日（前営業日など）を最新営業日として扱う。
 """
 import re
 from datetime import datetime, timedelta, timezone
 
 import requests
 from bs4 import BeautifulSoup
+from price_store import get_stock_df
 
 JST = timezone(timedelta(hours=9))
 
@@ -97,16 +100,30 @@ def get_trading_dates(now=None):
     return dates, source
 
 
-def get_yfinance_available_dates():
-    """分析データの供給元である yfinance に、どの日付まで日足が入っているかを ^N225 で確認する。"""
+def get_available_price_dates(now=None):
+    """
+    ローカル保存＋差分積み重ね（Yahoo!ファイナンス日本 / yfinance）によって
+    現在取得・分析可能な営業日の集合を返す。
+    """
     try:
-        return set(_fetch_from_yfinance_nikkei())
+        df = get_stock_df("^N225", now=now)
+        if df is not None and not df.empty:
+            return {d.strftime("%Y-%m-%d") for d in df.index}
+    except Exception:
+        pass
+    try:
+        dates, _ = get_trading_dates(now=now)
+        return set(dates)
     except Exception:
         return set()
+
+
+# 後方互換エイリアス
+get_yfinance_available_dates = get_available_price_dates
 
 
 if __name__ == "__main__":
     d, s = get_trading_dates()
     print("ソース:", s)
     print("直近の営業日:", d[-10:])
-    print("yfinance 反映済み:", sorted(get_yfinance_available_dates())[-5:])
+    print("利用可能データ日:", sorted(get_available_price_dates())[-5:])
