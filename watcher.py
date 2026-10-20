@@ -9,7 +9,7 @@ from ai_analyzer import get_ai_analysis
 from news_fetcher import fetch_recent_news
 import json
 from risk_reward import analyze_candlestick, calculate_risk_reward
-from price_store import get_stock_df
+from price_store import get_stock_df, summarize_long_term_context
 
 JST = timezone(timedelta(hours=9))
 
@@ -196,6 +196,10 @@ def process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=
                     tech_data['リスクリワード比'] = f"1 : {rr_data['rr_ratio']} ({rr_data['rr_eval']})"
                 if candle_analysis:
                     tech_data['ローソク足特性'] = f"上ヒゲ率 {candle_analysis['upper_wick_ratio']*100:.1f}%"
+                lt_ctx = summarize_long_term_context(df)
+                if lt_ctx:
+                    tech_data['直近1年(52週)レンジ'] = f"{lt_ctx['low_1y']:,}円 〜 {lt_ctx['high_1y']:,}円 (高値比 {lt_ctx['pct_from_1y_high']:+}%)"
+                    tech_data[f"長期({lt_ctx['years_span']}年)レンジ位置"] = f"{lt_ctx['low_10y']:,}円 〜 {lt_ctx['high_10y']:,}円 (水準 {lt_ctx['pos_in_10y_range_pct']}%)" 
 
                 news_list = fetch_recent_news(code, limit=3) # 最新ニュースを3件取得
                 ai_comment = get_ai_analysis(code, price, tech_data, news_list, api_key)

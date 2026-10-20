@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from scanner import SCAN_UNIVERSE
+from price_store import get_stock_df
 import concurrent.futures
 import time
 
@@ -21,7 +22,7 @@ def process_backtest_ticker(code, nk_data, start_str, end_str):
 
     for attempt in range(max_retries):
         try:
-            df = yf.Ticker(f"{code}.T").history(start=start_str, end=end_str)
+            df = get_stock_df(code)
             if df.empty or len(df) < 250:
                 return stats
 
@@ -116,7 +117,7 @@ def analyze():
     end_str = (end_date + timedelta(days=1)).strftime('%Y-%m-%d')
 
     try:
-        nk = yf.Ticker("^N225").history(start=start_str, end=end_str)
+        nk = get_stock_df("^N225")
         nk.index = nk.index.tz_localize(None)
         nk['MA200'] = nk['Close'].rolling(window=200).mean()
         nk['Is_Good_Market'] = nk['Close'] > nk['MA200']

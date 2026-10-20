@@ -10,7 +10,7 @@ import urllib.parse
 import feedparser
 import requests
 from risk_reward import analyze_candlestick, calculate_risk_reward
-from price_store import get_stock_df
+from price_store import get_stock_df, summarize_long_term_context
 
 JST = timezone(timedelta(hours=9))
 
@@ -391,7 +391,10 @@ def scan_b_type(target_date_str=None, api_key=""):
         if api_key:
             top_pick = scan_a[0]
             top_pick['is_top_pick'] = True
-            tech_data = f"RSI:{top_pick.get('rsi')}, 出来高:{top_pick.get('vol_text')}, シグナル:{','.join(top_pick.get('signals', []))}"
+            lt_df = get_stock_df(top_pick['code'], target_date_str=target_date_str)
+            lt_ctx = summarize_long_term_context(lt_df)
+            lt_str = f", 52週高安:{lt_ctx['low_1y']:,}-{lt_ctx['high_1y']:,}円, 10年レンジ位置:{lt_ctx['pos_in_10y_range_pct']}%" if lt_ctx else ""
+            tech_data = f"RSI:{top_pick.get('rsi')}, 出来高:{top_pick.get('vol_text')}, シグナル:{','.join(top_pick.get('signals', []))}{lt_str}"
             bold_comment = get_ai_bold_prediction(
                 top_pick['code'], top_pick['name'], top_pick['price'], tech_data, api_key,
                 rr_data=top_pick.get('risk_reward'), candle_data=top_pick.get('candlestick')

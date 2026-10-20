@@ -1,14 +1,13 @@
 """
-株価データのローカル保存＋差分積み重ね（インクリメンタル更新）モジュール。
+株価データのローカル永続保存（過去10年分＋日次差分積み重ね）モジュール。
 
 設計方針:
-1. 初回（または新規に監視銘柄・スキャン銘柄へ登録された時）のみ、過去500日分のデータを取得して
-   `data/prices/{code}.csv` に保存する。
-2. 2回目以降は毎回500日分を取り直さず、保存済みCSVの最終日より後の「差分（その日のデータ）」だけを
-   取得して末尾に積み重ねる。
-3. 差分取得は Yahoo!ファイナンス（日本）の時系列ページを優先利用し、yfinance の反映遅延（夜間・翌朝まで
-   当日分が入らない問題）に左右されず、大引け後や日をまたいだ翌日開場前でも確実にデータを揃える。
-4. 株式分割・併合などで過去価格が変動した場合は、重複日の終値乖離を検知して自動で再取得する。
+1. 初回（または新規に監視銘柄へ登録された時）に1回だけ、過去10年分（period="10y"）の
+   日足データを一括取得して `data/prices/{code}.csv` に保存する。古いデータの切り捨ては行わない。
+2. 2回目以降（毎日の定期実行）は、米国 yfinance を使わず、Yahoo!ファイナンス（日本）の
+   時系列ページから「その日の差分データ（未取得営業日分）」だけを取得してCSV末尾に積み重ねる。
+3. 株式分割・併合などで過去価格が変動した場合は、重複日の終値乖離（1%超）を自動検知して
+   10年分を取り直し、価格の連続性を維持する。
 """
 import os
 import re
@@ -30,9 +29,6 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 # 大引け(15:30)後、確定値が出揃う時刻。これより前の「当日」行は取引中・未確定として除外する
 MARKET_CLOSE_CONFIRM_HOUR = 15
 MARKET_CLOSE_CONFIRM_MINUTE = 45
-
-# ローカルCSVに保持する最大営業日数（200日移動平均＋十分な余裕）
-MAX_KEEP_ROWS = 400
 
 _file_locks = {}
 _global_lock = threading.Lock()
@@ -91,14 +87,16 @@ def _load_cached_df(code):
 
 
 def _save_cached_df(code, df):
+    """過去データを切り捨てず、全期間（10年分＋日々の積み重ね）を保存する。"""
     if df is None or df.empty:
         return
     path = _csv_path(code)
     out = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     out = out.dropna(subset=["Close"])
     out = out[~out.index.duplicated(keep="last")].sort_index()
-    if len(out) > MAX_KEEP_ROWS:
-        out = out.iloc[-MAX_KEEP_ROWS:]
+    for col in ["Open", "High", "Low", "Close"]:
+        out[col] = out[col].round(2)
+    out["Volume"] = out["Volume"].fillna(0).astype("int64")
     out_reset = out.reset_index()
     out_reset["Date"] = pd.to_datetime(out_reset["Date"]).dt.strftime("%Y-%m-%d")
     out_reset.to_csv(path, index=False, encoding="utf-8")
@@ -114,7 +112,7 @@ def _parse_num(text):
 def _fetch_recent_from_yahoo_japan(code, timeout=12, now=None):
     """
     Yahoo!ファイナンス（日本）の時系列ページから直近（約20営業日分）の4本値・出来高を取得する。
-    code: '7203' などの銘柄コード、または '^N225'
+    日常の差分更新はこの関数だけで完結する。
     """
     is_nikkei = str(code) in ("^N225", "N225", "998407.O")
     yj_code = "998407.O" if is_nikkei else f"{str(code).replace('.T', '')}.T"
@@ -135,7 +133,6 @@ def _fetch_recent_from_yahoo_japan(code, timeout=12, now=None):
         if not m:
             continue
         d_str = f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
-        # 大引け確定前の当日データは除外
         if d_str > cutoff_date:
             continue
 
@@ -169,39 +166,54 @@ def _fetch_recent_from_yahoo_japan(code, timeout=12, now=None):
     return df.set_index("Date")
 
 
-def _fetch_from_yfinance(code, start_str, end_str, now=None):
-    """yfinance から指定期間のデータを取得する（初回500日取得、または長期差分の補完用）。"""
+def _fetch_initial_10y(code, period="10y", now=None):
+    """
+    新規銘柄の初回登録時（または株式分割による再構築時）のみ、過去10年分を一括取得する。
+    直近の未反映分があれば Yahoo!ファイナンス（日本）のデータで末尾を補完する。
+    """
     is_nikkei = str(code) in ("^N225", "N225")
     yf_symbol = "^N225" if is_nikkei else f"{str(code).replace('.T', '')}.T"
     cutoff_date = _confirmed_cutoff_date_str(now)
 
     ticker = yf.Ticker(yf_symbol)
-    df = ticker.history(start=start_str, end=end_str)
+    df = ticker.history(period=period)
     if df is None or df.empty:
-        return pd.DataFrame()
-
-    df = df.dropna(subset=["Close"])
-    if df.empty:
-        return pd.DataFrame()
-
-    if df.index.tz is not None:
-        df.index = df.index.tz_convert("Asia/Tokyo").tz_localize(None)
+        df = pd.DataFrame()
     else:
-        df.index = df.index.tz_localize(None)
+        df = df.dropna(subset=["Close"])
+        if not df.empty:
+            if df.index.tz is not None:
+                df.index = df.index.tz_convert("Asia/Tokyo").tz_localize(None)
+            else:
+                df.index = df.index.tz_localize(None)
+            df.index = pd.to_datetime(df.index.strftime("%Y-%m-%d"))
+            df = df[df.index <= pd.to_datetime(cutoff_date)]
+            for col in ["Open", "High", "Low", "Close", "Volume"]:
+                if col not in df.columns:
+                    df[col] = 0.0
+            df = df[["Open", "High", "Low", "Close", "Volume"]]
 
-    df.index = pd.to_datetime(df.index.strftime("%Y-%m-%d"))
-    df = df[df.index <= pd.to_datetime(cutoff_date)]
-    for col in ["Open", "High", "Low", "Close", "Volume"]:
-        if col not in df.columns:
-            df[col] = 0.0
-    return df[["Open", "High", "Low", "Close", "Volume"]]
+    # 直近分を Yahoo!ファイナンス（日本）で補完
+    try:
+        yj_df = _fetch_recent_from_yahoo_japan(code, now=now)
+        if not yj_df.empty:
+            if df.empty:
+                df = yj_df
+            else:
+                new_rows = yj_df[yj_df.index > df.index[-1]]
+                if not new_rows.empty:
+                    df = pd.concat([df, new_rows]).sort_index()
+    except Exception:
+        pass
+
+    return df
 
 
-def get_stock_df(code, target_date_str=None, days_initial=500, now=None):
+def get_stock_df(code, target_date_str=None, now=None):
     """
-    銘柄の株価DataFrameを取得する。
-    - キャッシュがあれば読み込み、不足している最新日（差分）のみを積み重ねて保存する。
-    - キャッシュがなければ（新規登録銘柄など）初回のみ過去500日分を取得して保存する。
+    銘柄の株価DataFrame（過去10年分＋最新差分）を取得する。
+    - ローカルCSVがあれば読み込み、不足している最新日（差分）のみを Yahoo!ファイナンス（日本）から積み重ねる。
+    - ローカルCSVがなければ（新規登録銘柄など）初回のみ過去10年分を取得して保存する。
     """
     lock = _get_lock(_safe_filename(code))
     with lock:
@@ -210,53 +222,37 @@ def get_stock_df(code, target_date_str=None, days_initial=500, now=None):
 
         df = _load_cached_df(code)
 
-        # 1. 初回取得（未保存の銘柄、またはデータ行数が足りない場合）
-        if df is None or len(df) < 200:
-            end_dt = datetime.now(JST)
-            start_str = (end_dt - timedelta(days=days_initial)).strftime("%Y-%m-%d")
-            end_str = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-            df = _fetch_from_yfinance(code, start_str, end_str, now=now)
-
-            # yfinance に直近（当日・前日）が未反映の場合に備え、Yahoo!ファイナンス日本で最新差分を積み重ねる
+        # 1. 初回取得（未保存の新規登録銘柄など）
+        if df is None or df.empty:
+            df = _fetch_initial_10y(code, period="10y", now=now)
             if not df.empty:
-                last_dt_str = df.index[-1].strftime("%Y-%m-%d")
-                if last_dt_str < need_until:
-                    try:
-                        yj_df = _fetch_recent_from_yahoo_japan(code, now=now)
-                        if not yj_df.empty:
-                            new_rows = yj_df[yj_df.index > df.index[-1]]
-                            if not new_rows.empty:
-                                df = pd.concat([df, new_rows]).sort_index()
-                    except Exception:
-                        pass
                 _save_cached_df(code, df)
 
-        # 2. 2回目以降：ローカル保存済みデータに「差分（未取得日分）」だけを積み重ねる
+        # 2. 2回目以降：ローカル保存済みデータに Yahoo!ファイナンス（日本）から「差分」だけを積み重ねる
         else:
             last_cached_dt = df.index[-1]
             last_cached_str = last_cached_dt.strftime("%Y-%m-%d")
 
             if last_cached_str < need_until:
+                need_full_rebuild = False
                 updated = False
-                need_full_refetch = False
 
-                # まず Yahoo!ファイナンス（日本）から直近差分を取得（引け後すぐ反映され遅延がない）
                 try:
                     yj_df = _fetch_recent_from_yahoo_japan(code, now=now)
                     if not yj_df.empty:
-                        # 株式分割・併合チェック: 重複する最終日の終値が1%以上乖離していたらフル再取得
+                        # 株式分割・併合チェック: 重複する最終日の終値が1%以上乖離していたら10年分を再構築
                         if last_cached_dt in yj_df.index:
                             cached_close = float(df.loc[last_cached_dt, "Close"])
                             yj_close = float(yj_df.loc[last_cached_dt, "Close"])
                             if cached_close > 0 and abs(cached_close - yj_close) / cached_close > 0.01:
-                                need_full_refetch = True
+                                need_full_rebuild = True
 
-                        # キャッシュ最終日より新しい日が20営業日以上空いてギャップがある場合もyfinanceで間を埋める
+                        # 20営業日以上の長期ブランクがある場合も再構築
                         earliest_yj_str = yj_df.index[0].strftime("%Y-%m-%d")
                         if earliest_yj_str > last_cached_str:
-                            need_full_refetch = True
+                            need_full_rebuild = True
 
-                        if not need_full_refetch:
+                        if not need_full_rebuild:
                             new_rows = yj_df[yj_df.index > last_cached_dt]
                             if not new_rows.empty:
                                 df = pd.concat([df, new_rows]).sort_index()
@@ -264,36 +260,11 @@ def get_stock_df(code, target_date_str=None, days_initial=500, now=None):
                 except Exception:
                     pass
 
-                # 分割検知時や長期ギャップ時、またはYahoo!ファイナンス日本で未取得だった場合のフォールバック
-                if need_full_refetch:
-                    end_dt = datetime.now(JST)
-                    start_str = (end_dt - timedelta(days=days_initial)).strftime("%Y-%m-%d")
-                    end_str = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
-                    fresh_df = _fetch_from_yfinance(code, start_str, end_str, now=now)
+                if need_full_rebuild:
+                    fresh_df = _fetch_initial_10y(code, period="10y", now=now)
                     if not fresh_df.empty:
                         df = fresh_df
-                        try:
-                            yj_df = _fetch_recent_from_yahoo_japan(code, now=now)
-                            if not yj_df.empty:
-                                new_rows = yj_df[yj_df.index > df.index[-1]]
-                                if not new_rows.empty:
-                                    df = pd.concat([df, new_rows]).sort_index()
-                        except Exception:
-                            pass
                         updated = True
-                elif not updated or df.index[-1].strftime("%Y-%m-%d") < need_until:
-                    # 差分期間だけを yfinance から取得して積み重ねる
-                    start_str = last_cached_str
-                    end_str = (datetime.now(JST) + timedelta(days=1)).strftime("%Y-%m-%d")
-                    try:
-                        diff_df = _fetch_from_yfinance(code, start_str, end_str, now=now)
-                        if not diff_df.empty:
-                            new_rows = diff_df[diff_df.index > df.index[-1]]
-                            if not new_rows.empty:
-                                df = pd.concat([df, new_rows]).sort_index()
-                                updated = True
-                    except Exception:
-                        pass
 
                 if updated:
                     _save_cached_df(code, df)
@@ -304,3 +275,34 @@ def get_stock_df(code, target_date_str=None, days_initial=500, now=None):
         if target_date_str:
             df = df[df.index <= pd.to_datetime(target_date_str)]
         return df.copy()
+
+
+def summarize_long_term_context(df):
+    """
+    10年分の時系列データから、AI分析や長期判断に役立つ長期指標（52週高安・5年/10年レンジ位置）を算出する。
+    """
+    if df is None or len(df) < 250:
+        return {}
+    latest_close = float(df["Close"].iloc[-1])
+
+    # 1年（約245営業日）
+    df_1y = df.tail(245)
+    high_1y = float(df_1y["High"].max())
+    low_1y = float(df_1y["Low"].min())
+    pct_from_1y_high = round((latest_close - high_1y) / high_1y * 100, 1) if high_1y > 0 else 0.0
+
+    # 全保存期間（最大10年）
+    years_span = round((df.index[-1] - df.index[0]).days / 365.25, 1)
+    high_all = float(df["High"].max())
+    low_all = float(df["Low"].min())
+    pos_in_all = round((latest_close - low_all) / (high_all - low_all) * 100, 1) if high_all > low_all else 50.0
+
+    return {
+        "years_span": years_span,
+        "high_1y": int(high_1y),
+        "low_1y": int(low_1y),
+        "pct_from_1y_high": pct_from_1y_high,
+        "high_10y": int(high_all),
+        "low_10y": int(low_all),
+        "pos_in_10y_range_pct": pos_in_all,
+    }
