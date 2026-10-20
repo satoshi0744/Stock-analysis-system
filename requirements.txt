@@ -3,3 +3,4 @@ pandas-datareader
 yfinance
 feedparser
 requests
+beautifulsoup4

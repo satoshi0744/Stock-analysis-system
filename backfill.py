@@ -10,10 +10,10 @@ JST = timezone(timedelta(hours=9))
 HISTORY_DIR = "public/history"
 
 def get_trading_days(days_back):
-    """7203(トヨタ)を基準に、過去の『実際の営業日』リストを取得する"""
+    """日経平均(^N225)を基準に、過去の『実際の営業日』リストを取得する（個別銘柄には依存しない）"""
     end = datetime.now(JST)
     start = end - timedelta(days=days_back * 2) # 祝日を加味して余裕を持って取得
-    ticker = yf.Ticker("7203.T")
+    ticker = yf.Ticker("^N225")
     df = ticker.history(start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'))
     
     if df.empty:
@@ -48,15 +48,14 @@ def run_backfill(days_back=10):
         watch_data = analyze_watch_tickers(date_str)
         
         # --- 🛡️ データの健全性チェック（GPT防衛線） ---
-        # 取得したデータの「最新日付」が、本当に target_date と一致しているか検証
+        # 取得したデータの「最新日付」が target_date と一致する銘柄が1つでもあるか検証
+        # （特定の監視銘柄には依存しない）
         is_valid = False
         for w in watch_data:
-            if w["code"] == "7203" and not w["error"] and "history_data" in w:
-                if len(w["history_data"]) > 0:
-                    latest_history_date = w["history_data"][-1]["time"]
-                    if latest_history_date == date_str:
-                        is_valid = True
-                break
+            if not w["error"] and w.get("history_data"):
+                if w["history_data"][-1]["time"] == date_str:
+                    is_valid = True
+                    break
         
         if not is_valid:
             print(f" ⚠️ データ不整合（非営業日またはAPI遅延）のため保存をスキップ")

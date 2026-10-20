@@ -50,7 +50,7 @@ def generate_watch_comment(signals, rsi, position, ma25_trend, vol_ratio, rr_dat
             
     return comment
 
-def process_watch_ticker(code, name, start_str, end_str, api_key):
+def process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=None):
     max_retries = 3
     base_wait = 2
 
@@ -69,6 +69,11 @@ def process_watch_ticker(code, name, start_str, end_str, api_key):
                 return {"code": code, "name": name, "error": True, "error_msg": "データ不足（新規上場など）"}
                 
             df.index = df.index.tz_localize(None)
+
+            # 日付照合ガード: 最終行が対象日でなければ、古いデータを当日扱いしない
+            if expected_date and df.index[-1].strftime('%Y-%m-%d') != expected_date:
+                return {"code": code, "name": name, "error": True,
+                        "error_msg": f"対象日({expected_date})のデータ未反映（最新: {df.index[-1].strftime('%Y-%m-%d')}）"}
             
             df['MA5'] = df['Close'].rolling(window=5).mean()
             df['MA25'] = df['Close'].rolling(window=25).mean()
@@ -229,7 +234,7 @@ def analyze_watch_tickers(target_date_str=None):
 
     # 💡 【重要変更】API制限(15RPM)を回避するため、並列処理をやめて直列処理＋ウェイト(4秒)に変更
     for code, name in WATCH_TICKERS.items():
-        res = process_watch_ticker(code, name, start_str, end_str, api_key)
+        res = process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=target_date_str)
         results.append(res)
         if api_key:
             time.sleep(4) # AIに負荷をかけないための安全装置

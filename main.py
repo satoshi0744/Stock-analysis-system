@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from scanner import scan_b_type
 from watcher import analyze_watch_tickers
 from report_generator import generate_files, load_previous_report
+from market_calendar import get_trading_dates, get_yfinance_available_dates
 
 # 日本時間のタイムゾーン設定
 JST = timezone(timedelta(hours=9))
@@ -73,39 +74,71 @@ def get_last_processed_data_date():
     return None
 
 def get_unprocessed_market_dates():
-    """yfinanceの7203.Tから直近営業日リストを取得し、前回処理済み日より後の未処理日付リストを返す。"""
+    """
+    東証の営業日（日経平均ベース・個別銘柄非依存）と、分析データ供給元(yfinance)の反映状況を突き合わせ、
+    処理すべき日付を判定する。
+
+    戻り値: dict
+      ready     : 今回処理する日付（yfinance反映済みで、古い順に連続しているもの）
+      pending   : 営業日だが yfinance 未反映のため保留する日付
+      latest    : 確定済みの最新営業日
+      source    : 営業日判定に使ったソース
+      reason    : 判定内容の説明
+      error     : 営業日取得自体に失敗した場合のエラー文（なければ None）
+    """
     last_processed = get_last_processed_data_date()
+    result = {"ready": [], "pending": [], "latest": None, "source": "", "reason": "",
+              "error": None, "last_processed": last_processed}
     try:
-        ticker = yf.Ticker("7203.T")
-        df = ticker.history(period="15d")
-        if df.empty:
-            return [], "データプロバイダ（yfinance）からの取得失敗", None
-        
-        df = df.dropna(subset=['Close'])
-        if df.empty:
-            return [], "有効データなし", None
-        
-        df.index = df.index.tz_localize(None)
-        all_dates = [idx.strftime('%Y-%m-%d') for idx in df.index]
-        
-        if not all_dates:
-            return [], "営業日データなし", None
-
-        latest_market_date = all_dates[-1]
-
-        # 履歴が一切ない場合は最新日のみ
-        if not last_processed:
-            return [latest_market_date], f"初回実行（最新日: {latest_market_date}）", latest_market_date
-
-        # 前回処理済み日付よりも新しい営業日データを抽出
-        unprocessed = [d for d in all_dates if d > last_processed]
-
-        if not unprocessed:
-            return [], f"最新データ（{latest_market_date}）は既に前回レポート済みです（新データ未反映または休場日）。", latest_market_date
-
-        return unprocessed, f"未処理の営業日データ {len(unprocessed)} 件を検出: {', '.join(unprocessed)}", latest_market_date
+        trading_dates, source = get_trading_dates()
     except Exception as e:
-        return [], f"株価取得エラー: {str(e)}", None
+        result["error"] = str(e)
+        result["reason"] = f"営業日の判定に失敗しました: {e}"
+        return result
+
+    result["source"] = source
+    if not trading_dates:
+        result["reason"] = "確定済みの営業日が取得できませんでした。"
+        return result
+    result["latest"] = trading_dates[-1]
+
+    if last_processed:
+        unprocessed = [d for d in trading_dates if d > last_processed]
+    else:
+        unprocessed = [trading_dates[-1]]
+
+    if not unprocessed:
+        today_now = datetime.now(JST).strftime('%Y-%m-%d')
+        if today_now in trading_dates:
+            result["already_done"] = True
+            result["reason"] = f"本日（{today_now}）分は処理済みです（重複実行のため何もしません）。"
+            return result
+        result["reason"] = (f"新しい営業日はありません（確定済み最新営業日 {trading_dates[-1]} は処理済み）。"
+                            f"本日は休場日です。")
+        return result
+
+    # yfinance に日足が入っている日付だけを、古い順に「途切れなく」処理する。
+    # 途中の日が未反映なのに後の日を処理すると、前回処理日が進んでその日が永久に抜けるため。
+    available = get_yfinance_available_dates()
+    ready = []
+    for d in unprocessed:
+        if d in available:
+            ready.append(d)
+        else:
+            break
+    pending = unprocessed[len(ready):]
+    result["ready"] = ready
+    result["pending"] = pending
+
+    if ready and not pending:
+        result["reason"] = f"未処理の営業日 {len(ready)} 件を検出: {', '.join(ready)}"
+    elif ready and pending:
+        result["reason"] = (f"処理可能: {', '.join(ready)} / yfinance未反映のため保留: {', '.join(pending)}")
+    else:
+        latest_yf = max(available) if available else "取得失敗"
+        result["reason"] = (f"東証は営業日（{', '.join(pending)}）ですが、分析用データ（yfinance）に未反映です"
+                            f"（yfinance上の最新: {latest_yf}）。")
+    return result
 
 def main():
     today_str = datetime.now(JST).strftime('%Y-%m-%d')
@@ -113,20 +146,39 @@ def main():
     
     force_run = os.environ.get("FORCE_RUN", "").lower() in ["true", "1"] or ("--force" in sys.argv)
     
-    unprocessed_dates, reason, latest_date = get_unprocessed_market_dates()
+    status = get_unprocessed_market_dates()
+    unprocessed_dates = status["ready"]
+    latest_date = status["latest"]
+    reason = status["reason"]
+    print(f"🗓️ 営業日判定ソース: {status['source'] or '取得失敗'}")
+    print(f"🗓️ 前回処理済み: {status['last_processed']} / 確定済み最新営業日: {latest_date}")
+    print(f"🗓️ 判定: {reason}")
     
-    if force_run and not unprocessed_dates and latest_date:
+    if force_run and not unprocessed_dates and latest_date and not status["pending"]:
         print(f"⚡ [FORCE] 強制実行フラグが有効です。最新営業日（{latest_date}）でレポート生成・メール送信を実行します。")
         unprocessed_dates = [latest_date]
+    elif not unprocessed_dates and status.get("already_done"):
+        print(f"✅ [DONE] {reason}")
+        sys.exit(0)
     elif not unprocessed_dates:
-        subject = f"🚨【休場・未更新】株価データ処理スキップ [{today_str}]"
-        body = f"本日（{today_str}）の株価データ分析・配信を安全にスキップしました。\n\n"
-        body += f"【スキップ理由】\n{reason}\n\n"
-        if latest_date:
-            body += f"最新取得可能データ日付：{latest_date}\n\n"
-        body += "誤ったデータや重複配信による統計汚染を防ぐための正常な処理ストップです。\n"
-        body += "相場再開および最新データの反映が確認され次第、自動的に正常稼働いたします。\n"
-        print(f"🛑 [SKIP] データ未更新のため処理を安全に停止します: {reason}")
+        if status["error"]:
+            subject = f"⚠️【判定エラー】株価データ処理スキップ [{today_str}]"
+        elif status["pending"]:
+            subject = f"⏳【データ未反映】株価データ処理を保留 [{today_str}]"
+        else:
+            subject = f"💤【休場日】株価データ処理スキップ [{today_str}]"
+        body = f"本日（{today_str}）の株価データ分析・配信をスキップしました。\n\n"
+        body += f"【理由】\n{reason}\n\n"
+        body += "【判定の詳細】\n"
+        body += f"・営業日判定ソース：{status['source'] or '取得失敗'}\n"
+        body += f"・確定済み最新営業日：{latest_date or '不明'}\n"
+        body += f"・前回処理済みデータ日：{status['last_processed'] or 'なし'}\n"
+        if status["pending"]:
+            body += f"・保留中の営業日：{', '.join(status['pending'])}\n"
+        body += f"・実行時刻（JST）：{datetime.now(JST).strftime('%Y-%m-%d %H:%M')}\n\n"
+        if status["pending"]:
+            body += "保留した営業日は、次回実行時にデータ反映を確認して自動で補完（バックフィル）します。\n"
+        print(f"🛑 [SKIP] {reason}")
         send_email(body, subject=subject)
         sys.exit(0)
 

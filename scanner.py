@@ -185,7 +185,7 @@ def generate_ai_comment(group, vol_ratio, is_yosen, is_above_ma200, rsi, is_brea
 
     return comment
 
-def check_market_trend(start_str, end_str):
+def check_market_trend(start_str, end_str, expected_date=None):
     try:
         ticker = yf.Ticker("^N225")
         df = ticker.history(start=start_str, end=end_str)
@@ -195,6 +195,10 @@ def check_market_trend(start_str, end_str):
         df = df.dropna(subset=['Close'])
         if len(df) < 200:
             return False, "判定不能", {}
+        # 日付照合ガード: 日経平均の最終行が対象日でなければ相場判定に使わない
+        last_date = df.index[-1].strftime('%Y-%m-%d')
+        if expected_date and last_date != expected_date:
+            return False, f"対象日({expected_date})の日経平均データ未反映（最新: {last_date}）", {}
         
         df['MA5'] = df['Close'].rolling(window=5).mean()
         df['MA25'] = df['Close'].rolling(window=25).mean()
@@ -226,7 +230,7 @@ def check_market_trend(start_str, end_str):
     except Exception:
         return False, "データ取得エラー", {}
 
-def process_ticker(code, name, start_str, end_str, is_good_market):
+def process_ticker(code, name, start_str, end_str, is_good_market, expected_date=None):
     max_retries = 3
     base_wait = 2
     for attempt in range(max_retries):
@@ -241,6 +245,9 @@ def process_ticker(code, name, start_str, end_str, is_good_market):
                 return None
             
             df.index = df.index.tz_localize(None)
+            # 日付照合ガード: 最終行が対象日でなければ採用しない
+            if expected_date and df.index[-1].strftime('%Y-%m-%d') != expected_date:
+                return None
             df['MA25'] = df['Close'].rolling(window=25).mean()
             df['MA75'] = df['Close'].rolling(window=75).mean()
             df['MA200'] = df['Close'].rolling(window=200).mean()
@@ -365,13 +372,13 @@ def scan_b_type(target_date_str=None, api_key=""):
     start_str = (end - timedelta(days=500)).strftime('%Y-%m-%d')
     end_str = (end + timedelta(days=1)).strftime('%Y-%m-%d')
     
-    is_good_market, market_text, nikkei_data = check_market_trend(start_str, end_str)
+    is_good_market, market_text, nikkei_data = check_market_trend(start_str, end_str, target_date_str)
     
     scan_a = []
     scan_b = []
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(process_ticker, code, name, start_str, end_str, is_good_market): code for code, name in universe.items()}
+        futures = {executor.submit(process_ticker, code, name, start_str, end_str, is_good_market, target_date_str): code for code, name in universe.items()}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result is not None:

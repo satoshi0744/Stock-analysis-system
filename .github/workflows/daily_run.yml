@@ -43,6 +43,7 @@ jobs:
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FORCE_RUN: ${{ github.event.inputs.force }}
+          TZ: Asia/Tokyo # 念のためOSの時刻も日本標準時に固定（コード側は元々JSTを明示指定済み）
         run: python main.py
 
       # ==========================================
