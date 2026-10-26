@@ -11,6 +11,7 @@ import feedparser
 import requests
 from risk_reward import analyze_candlestick, calculate_risk_reward
 from price_store import get_stock_df, summarize_long_term_context
+from technical_calc import detect_holy_grail_and_n_pattern
 
 JST = timezone(timedelta(hours=9))
 
@@ -258,7 +259,12 @@ def process_ticker(code, name, start_str, end_str, is_good_market, expected_date
             
             vol_ratio = latest['Volume'] / vol_avg20
             
-            if vol_ratio >= 1.5:
+            # 聖杯（ホーリー・グレイル）& N字ロールリバーサルの判定
+            pattern_res = detect_holy_grail_and_n_pattern(df)
+            is_holy_grail = pattern_res.get('is_holy_grail', False)
+            is_n_pattern = pattern_res.get('is_n_pattern', False)
+
+            if vol_ratio >= 1.5 or is_holy_grail or is_n_pattern:
                 if pd.isna(latest['Close']) or pd.isna(prev['Close']):
                     return None
                 price_diff = int(latest['Close'] - prev['Close'])
@@ -287,6 +293,10 @@ def process_ticker(code, name, start_str, end_str, is_good_market, expected_date
                 if candle_analysis.get('is_trap'):
                     trap_label = candle_analysis['trap_reasons'][0] if candle_analysis['trap_reasons'] else "上ヒゲ警戒"
                     signals.append(f"⚠️ [罠警戒] {trap_label}")
+
+                # 聖杯・N字ロールリバーサルシグナルの追加
+                for sig in pattern_res.get('signals', []):
+                    signals.append(sig)
 
                 if rr_data:
                     signals.append(f"⚖️ R/R 1:{rr_data['rr_ratio']}")
@@ -336,7 +346,9 @@ def process_ticker(code, name, start_str, end_str, is_good_market, expected_date
                 good_rr = (rr_data is None or rr_data.get('rr_ratio', 0) >= 1.2)
                 
                 is_breakout_a = (is_good_market and is_yosen and is_above_ma200 and is_breakout and is_pure_bull and not_trap and good_rr)
-                group = "A" if is_breakout_a or ("底打ち" in str(signals)) else "B"
+                is_grail_a = (is_good_market and is_holy_grail and is_pure_bull and not_trap and good_rr)
+                is_n_a = (is_good_market and is_n_pattern and is_pure_bull and not_trap and good_rr)
+                group = "A" if is_breakout_a or is_grail_a or is_n_a or ("底打ち" in str(signals)) else "B"
                 
                 ai_comment = generate_ai_comment(group, round(float(vol_ratio), 1), is_yosen, is_above_ma200, rsi, is_breakout, rr_data=rr_data, candle_data=candle_analysis)
                 

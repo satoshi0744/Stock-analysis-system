@@ -10,6 +10,7 @@ from news_fetcher import fetch_recent_news
 import json
 from risk_reward import analyze_candlestick, calculate_risk_reward
 from price_store import get_stock_df, summarize_long_term_context
+from technical_calc import detect_holy_grail_and_n_pattern
 
 JST = timezone(timedelta(hours=9))
 
@@ -178,6 +179,11 @@ def process_watch_ticker(code, name, start_str, end_str, api_key, expected_date=
             if candle_analysis.get('is_trap'):
                 trap_label = candle_analysis['trap_reasons'][0] if candle_analysis['trap_reasons'] else "上ヒゲ警戒"
                 signals.append(f"⚠️ [罠警戒] {trap_label}")
+
+            # 聖杯 & N字ロールリバーサル判定
+            pattern_res = detect_holy_grail_and_n_pattern(df)
+            for sig in pattern_res.get('signals', []):
+                signals.append(sig)
 
             if rr_data:
                 signals.append(f"⚖️ R/R 1:{rr_data['rr_ratio']}")
